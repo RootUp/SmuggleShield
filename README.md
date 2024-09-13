@@ -1,9 +1,9 @@
 # SmuggleSheild
 ***Beta Version***
 
-SmuggleShield is an experimental browser extension that aims to prevent basic HTML smuggling attacks by detecting common patterns. While this is not a comprehensive or a bulletproof solution, it is an attempt to provide an addtional layer of security during browsing. **The project is still in testing phase!**
+SmuggleShield is an experimental browser extension that aims to prevent **basic** HTML smuggling attacks by detecting common patterns. While this is not a comprehensive or bulletproof solution, it is an attempt to provide an additional layer of security during browsing. **The project is still in the testing phase!**
 
-The extension is compatible both on Chrome & Edge for Mac and Windows OS. Enable developer mode under extension settings and click on "Load unpacked" the "SumggleSheild" folder the extension would be up and running. Blocked URLs are stored in extension cache upto 10 days with blocked pattern, URL and timestamp which can be reviewd by clicking on extension then "Export Blocked Conetent Logs". 
+The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enable developer mode under extension settings and click on "Load unpacked" in the "SumggleSheild" folder. The extension would be up and running. Blocked URLs are stored in extension cache up to 10 days with blocked pattern, URL, and timestamp, which can be reviewed by clicking on extension then "Export Blocked Content Logs.". 
 
 [Watch on Youtube](https://youtu.be/6x0Fe_63qxA)
 
