@@ -1,0 +1,2 @@
+# SmuggleSheild
+Protects HTML smuggling.
