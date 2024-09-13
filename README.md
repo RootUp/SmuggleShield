@@ -8,3 +8,5 @@ The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enab
 [Watch on Youtube](https://youtu.be/6x0Fe_63qxA)
 
 ![SmuggleSheild_POC](https://github.com/user-attachments/assets/c8602882-cd1b-48fb-9512-642993aadf88)
+
+I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
