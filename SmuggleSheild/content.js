@@ -180,53 +180,6 @@ class HTMLSmugglingBlocker {
     this.showBlockedMessage();
   }
 
-  showBlockedMessage() {
-    if (!document.getElementById('html-smuggling-blocker-message')) {
-      const messageElement = document.createElement('div');
-      messageElement.id = 'html-smuggling-blocker-message';
-      messageElement.innerHTML = `
-        <strong>⚠️ Security Alert:</strong> Potential file smuggling attempt detected and blocked.
-        <span class="details">This page tried to download a file in a suspicious manner.</span>
-      `;
-      messageElement.style.position = 'fixed';
-      messageElement.style.bottom = '0';
-      messageElement.style.left = '0';
-      messageElement.style.width = '100%';
-      messageElement.style.backgroundColor = '#ffdddd';
-      messageElement.style.color = '#000';
-      messageElement.style.padding = '10px';
-      messageElement.style.zIndex = '9999';
-      messageElement.style.display = 'flex';
-      messageElement.style.justifyContent = 'space-between';
-      messageElement.style.alignItems = 'center';
-
-      const closeButton = document.createElement('button');
-      closeButton.textContent = '×';
-      closeButton.style.backgroundColor = '#ffdddd';
-      closeButton.style.border = 'none';
-      closeButton.style.cursor = 'pointer';
-      closeButton.style.fontSize = '1.2em';
-      closeButton.style.color = '#000';
-      closeButton.style.padding = '5px';
-      closeButton.addEventListener('click', () => this.removeBlockedMessage());
-
-      messageElement.appendChild(closeButton);
-      document.body.appendChild(messageElement);
-
-      messageElement.animate([
-        { transform: 'translateY(-100%)' },
-        { transform: 'translateY(0)' }
-      ], {
-        duration: 300,
-        easing: 'ease-out'
-      });
-
-      setTimeout(() => {
-        this.removeBlockedMessage();
-      }, 7000);
-    }
-  }
-
   removeBlockedMessage() {
     const messageElement = document.getElementById('html-smuggling-blocker-message');
     if (messageElement) {
