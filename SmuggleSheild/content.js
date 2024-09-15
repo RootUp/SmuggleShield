@@ -179,21 +179,6 @@ class HTMLSmugglingBlocker {
     console.log("Suspicious headers detected");
     this.showBlockedMessage();
   }
-
-  removeBlockedMessage() {
-    const messageElement = document.getElementById('html-smuggling-blocker-message');
-    if (messageElement) {
-      messageElement.animate([
-        { transform: 'translateY(0)' },
-        { transform: 'translateY(-100%)' }
-      ], {
-        duration: 300,
-        easing: 'ease-in'
-      }).onfinish = () => {
-        messageElement.remove();
-      };
-    }
-  }
 }
 
 new HTMLSmugglingBlocker();
