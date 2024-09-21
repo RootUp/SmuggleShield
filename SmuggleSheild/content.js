@@ -17,7 +17,6 @@ class HTMLSmugglingBlocker {
       { pattern: /[sS]tring\.from[cC]har[cC]ode\(.*\)/i, weight: 2 },
       { pattern: /\.char[cC]ode[aA]t\(.*\)/i, weight: 2 },
       { pattern: /document\.get[eE]lement[bB]y[iI]d\(['"']passwordid['"']\)\.value/i, weight: 3 },
-      { pattern: /\.replace\(/i, weight: 1 },
       { pattern: /[aA][tT][oO][bB]\s*\(\s*['"]([A-Za-z0-9+/=]{100,})['"].*\)/i, weight: 3 },
       { pattern: /new\s+[bB]lob\s*\(\s*\[\s*[aA][tT][oO][bB]\s*\(/i, weight: 3 },
       { pattern: /import\s*\(\s*[uU][rR][lL]\.create[oO]bject[uU][rR][lL]\s*\(/i, weight: 3 },
