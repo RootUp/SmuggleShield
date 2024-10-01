@@ -10,3 +10,7 @@ The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enab
 ![SmuggleSheild_POC](https://github.com/user-attachments/assets/c8602882-cd1b-48fb-9512-642993aadf88)
 
 I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
+
+## **SmuggleSheild could have prevented**
+
+- [HTML smuggling is delivering DCRat malware, bypassing traditional security controls by embedding malicious payloads in HTML files. This advanced technique poses a global threat to unsuspecting users](https://x.com/RandomDhiraj/status/1839717748970021027).
