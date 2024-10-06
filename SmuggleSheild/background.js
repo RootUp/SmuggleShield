@@ -1,3 +1,4 @@
+# sample text
 const config = {
   suspiciousURLPatterns: [
     /data:application\/octet-stream/i,
