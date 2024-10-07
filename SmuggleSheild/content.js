@@ -29,7 +29,7 @@ class HTMLSmugglingBlocker {
       { pattern: /import\s*\(\s*url\.createobjecturl\s*\(/i, weight: 3 },
       { pattern: /\w+\s*\(\s*\w+\s*\(\s*['"][A-Za-z0-9+/=]{50,}['"]\s*\)\s*\)/i, weight: 3 },
       { pattern: /(?:window\.)?atob\s*\(/i, weight: 2 },
-      { pattern: /uint8array\s*\(\s*(?:[^)]|len)*\)/i, weight: 2 },
+      { pattern: /uint8[aA]rray\s*\(\s*(?:(?!len)[^)])*\)/i, weight: 2 },
       { pattern: /mssaveoropenblob|mssaveblob/i, weight: 3 },
       { pattern: /base64toarraybuffer/i, weight: 3 },
       { pattern: /wasm[_-]?exec\.js/i, weight: 2 },
