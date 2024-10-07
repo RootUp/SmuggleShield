@@ -15,4 +15,6 @@ I have taken multiple code references from StackOverflow/Github and file smuggli
 
 ## **SmuggleSheild could have prevented**
 
+- [Quakbot- 14072022](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)
+- [Pikabot | TA577 | 1.1.15-ghost](https://github.com/pr0xylife/Pikabot/blob/main/Pikabot_01.11.2023.txt)
 - [HTML smuggling is delivering DCRat malware, bypassing traditional security controls by embedding malicious payloads in HTML files. This advanced technique poses a global threat to unsuspecting users](https://x.com/RandomDhiraj/status/1839717748970021027).
