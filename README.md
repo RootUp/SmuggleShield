@@ -13,6 +13,9 @@ The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enab
 
 I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
 
+## **Privacy Policy**
+- [Privacy Policy for SmuggleSheild](https://www.inputzero.io/p/smuggelsheild.html)
+
 ## **SmuggleSheild could have prevented**
 
 - [Quakbot- 14072022](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)
