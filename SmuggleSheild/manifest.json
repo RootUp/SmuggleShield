@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SmuggleShield",
+  "name": "SmuggleSheild",
   "version": "2.0",
   "description": "Basic protection against HTML smuggling attempts.",
   "author": "Dhiraj Mishra (@RandomDhiraj)",
@@ -24,6 +24,16 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon/SmuggleSheild.png",
+      "48": "icon/SmuggleSheild.png",
+      "128": "icon/SmuggleSheild.png"
+    }
+  },
+  "icons": {
+    "16": "icon/SmuggleSheild.png",
+    "48": "icon/SmuggleSheild.png",
+    "128": "icon/SmuggleSheild.png"
   }
 }
