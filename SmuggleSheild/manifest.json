@@ -6,7 +6,6 @@
   "author": "Dhiraj Mishra (@RandomDhiraj)",
   "permissions": [
     "webRequest",
-    "webRequestBlocking",
     "storage",
     "tabs"
   ],
