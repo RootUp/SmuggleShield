@@ -35,5 +35,8 @@
     "16": "icon/SmuggleSheild.png",
     "48": "icon/SmuggleSheild.png",
     "128": "icon/SmuggleSheild.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
   }
 }
