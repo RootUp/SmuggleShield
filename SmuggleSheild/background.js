@@ -6,10 +6,25 @@ const config = {
   ],
   suspiciousHeaders: ['content-disposition', 'content-type'],
   logRetentionDays: 10,
-  cacheDurationMs: 5 * 60 * 1000, 
+  cacheDurationMs: 5 * 60 * 1000,
 };
 
 const urlCache = new Map();
+
+function memoize(fn, resolver) {
+  const cache = new Map();
+  return (...args) => {
+    const key = resolver ? resolver(...args) : args[0];
+    if (cache.has(key)) return cache.get(key);
+    const result = fn(...args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+const checkSuspiciousURL = memoize((url) => {
+  return config.suspiciousURLPatterns.some(pattern => pattern.test(url));
+}, (url) => url);
 
 function debounce(func, delay) {
   let timeoutId;
@@ -33,7 +48,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (cachedResult && (Date.now() - cachedResult.timestamp < config.cacheDurationMs)) {
         sendResponse({isSuspicious: cachedResult.isSuspicious});
       } else {
-        const isSuspicious = config.suspiciousURLPatterns.some(pattern => pattern.test(request.url));
+        const isSuspicious = checkSuspiciousURL(request.url);
         urlCache.set(request.url, {isSuspicious, timestamp: Date.now()});
         sendResponse({isSuspicious});
       }
@@ -51,16 +66,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function logBlockedContent(url, patterns, timestamp) {
-  chrome.storage.local.get(['blockedLogs', 'otherData'], function(result) {
+  chrome.storage.local.get(['blockedLogs'], function(result) {
     let logs = result.blockedLogs || [];
     logs.push({ url, patterns, timestamp });
     const retentionDate = Date.now() - (config.logRetentionDays * 24 * 60 * 60 * 1000);
     logs = logs.filter(log => log.timestamp > retentionDate);
     
-    chrome.storage.local.set({ 
-      blockedLogs: logs,
-      otherData: result.otherData // Preserve other data
-    }, () => {
+    chrome.storage.local.set({ blockedLogs: logs }, () => {
       if (chrome.runtime.lastError) {
         console.error('Error saving logs:', chrome.runtime.lastError);
       }
@@ -73,12 +85,16 @@ function updateConfig(newConfig) {
   urlCache.clear();
 }
 
+const checkSuspiciousHeaders = memoize((headers) => {
+  return headers.some(header => 
+    config.suspiciousHeaders.includes(header.name.toLowerCase()) &&
+    /attachment|application\/octet-stream/i.test(header.value)
+  );
+}, (headers) => JSON.stringify(headers));
+
 chrome.webRequest.onHeadersReceived.addListener(
   (details) => {
-    const hasSuspiciousHeaders = details.responseHeaders.some(header => 
-      config.suspiciousHeaders.includes(header.name.toLowerCase()) &&
-      /attachment|application\/octet-stream/i.test(header.value)
-    );
+    const hasSuspiciousHeaders = checkSuspiciousHeaders(details.responseHeaders);
 
     if (hasSuspiciousHeaders) {
       chrome.tabs.sendMessage(details.tabId, {action: "suspiciousHeadersDetected"})
@@ -93,9 +109,9 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 setInterval(() => {
   const now = Date.now();
-  for (const [url, data] of urlCache.entries()) {
+  urlCache.forEach((data, url) => {
     if (now - data.timestamp > config.cacheDurationMs) {
       urlCache.delete(url);
     }
-  }
+  });
 }, config.cacheDurationMs);
