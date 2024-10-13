@@ -177,7 +177,6 @@ class HTMLSmugglingBlocker {
 
   handleSuspiciousHeaders() {
     console.log("Suspicious headers detected");
-    this.showBlockedMessage();
   }
 }
 
