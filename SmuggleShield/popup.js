@@ -10,6 +10,11 @@ document.addEventListener('DOMContentLoaded', function() {
     exportButton.addEventListener('click', function() {
         console.log("Export logs button clicked");
         chrome.runtime.sendMessage({action: "exportLogs"}, function(response) {
+            if (chrome.runtime.lastError) {
+                console.error("Error exporting logs:", chrome.runtime.lastError);
+                alert('An error occurred while exporting logs.');
+                return;
+            }
             console.log("Received export logs response:", response);
             if (response && response.logs && response.logs.length > 0) {
                 const blob = new Blob([JSON.stringify(response.logs, null, 2)], {type: "application/json"});
