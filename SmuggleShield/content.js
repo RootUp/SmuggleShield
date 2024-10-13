@@ -1,6 +1,7 @@
 class HTMLSmugglingBlocker {
   constructor() {
-    this.blocked = false;    this.suspiciousPatterns = [
+    this.blocked = false;    
+    this.suspiciousPatterns = [
       { pattern: /atob\s*\([^)]+\).*new\s+uint8array/is, weight: 3 },
       { pattern: /atob\s*\(\s*['"]([A-Za-z0-9+/=]{100,})['"].*\)/i, weight: 3 },
       { pattern: /new\s+blob\s*\(\s*\[\s*(?:data|atob\s*\()/i, weight: 3 },
