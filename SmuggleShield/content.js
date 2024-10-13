@@ -70,8 +70,10 @@ class HTMLSmugglingBlocker {
   }
 
   setupObserver() {
-    const observer = new MutationObserver(() => {
-      this.analyzeContent();
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.some(mutation => mutation.addedNodes.length > 0)) {
+        this.analyzeContent();
+      }
     });
 
     observer.observe(document.documentElement, {
@@ -91,7 +93,7 @@ class HTMLSmugglingBlocker {
       if (pattern.test(htmlContent)) {
         score += weight;
         detectedPatterns.push(pattern.toString());
-        if (score >= this.threshold) break; // Early exit if threshold is reached
+        if (score >= this.threshold) break; 
       }
     }
 
