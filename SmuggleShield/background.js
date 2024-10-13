@@ -18,6 +18,10 @@ function memoize(fn, resolver) {
     if (cache.has(key)) return cache.get(key);
     const result = fn(...args);
     cache.set(key, result);
+    if (cache.size > 1000) {
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+    }
     return result;
   };
 }
@@ -109,9 +113,9 @@ chrome.webRequest.onHeadersReceived.addListener(
 
 setInterval(() => {
   const now = Date.now();
-  urlCache.forEach((data, url) => {
+  for (const [url, data] of urlCache) {
     if (now - data.timestamp > config.cacheDurationMs) {
       urlCache.delete(url);
     }
-  });
+  }
 }, config.cacheDurationMs);
