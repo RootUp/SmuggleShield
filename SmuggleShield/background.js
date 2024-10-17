@@ -9,18 +9,55 @@ const config = {
   cacheDurationMs: 5 * 60 * 1000,
 };
 
-const urlCache = new Map();
+class WeakLRUCache {
+  constructor(maxSize) {
+    this.maxSize = maxSize;
+    this.cache = new Map();
+    this.keyMap = new WeakMap();
+  }
+
+  get(key) {
+    const keyObj = this.keyMap.get(key);
+    if (!keyObj) return undefined;
+    const value = this.cache.get(keyObj);
+    if (value) {
+      this.cache.delete(keyObj);
+      this.cache.set(keyObj, value);
+    }
+    return value;
+  }
+
+  set(key, value) {
+    let keyObj = this.keyMap.get(key);
+    if (!keyObj) {
+      keyObj = { key };
+      this.keyMap.set(key, keyObj);
+    }
+    if (this.cache.has(keyObj)) {
+      this.cache.delete(keyObj);
+    } else if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(keyObj, value);
+  }
+
+  clear() {
+    this.cache.clear();
+    this.keyMap = new WeakMap();
+  }
+}
+
+const urlCache = new WeakLRUCache(1000);
 
 function memoize(fn, resolver) {
-  const cache = new Map();
+  const cache = new WeakLRUCache(1000);
   return (...args) => {
     const key = resolver ? resolver(...args) : args[0];
-    if (cache.has(key)) return cache.get(key);
-    const result = fn(...args);
-    cache.set(key, result);
-    if (cache.size > 1000) {
-      const oldestKey = cache.keys().next().value;
-      cache.delete(oldestKey);
+    let result = cache.get(key);
+    if (result === undefined) {
+      result = fn(...args);
+      cache.set(key, result);
     }
     return result;
   };
@@ -110,12 +147,3 @@ chrome.webRequest.onHeadersReceived.addListener(
   {urls: ["<all_urls>"]},
   ["responseHeaders"]
 );
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [url, data] of urlCache) {
-    if (now - data.timestamp > config.cacheDurationMs) {
-      urlCache.delete(url);
-    }
-  }
-}, config.cacheDurationMs);
