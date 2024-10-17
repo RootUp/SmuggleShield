@@ -85,13 +85,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.warn(request.message);
       break;
     case "analyzeURL":
-      const cachedResult = urlCache.get(request.url);
-      if (cachedResult && (Date.now() - cachedResult.timestamp < config.cacheDurationMs)) {
-        sendResponse({isSuspicious: cachedResult.isSuspicious});
+      const result = memoizedAnalyzeURL(request.url);
+      if (Date.now() - result.timestamp < config.cacheDurationMs) {
+        sendResponse({isSuspicious: result.isSuspicious});
       } else {
-        const isSuspicious = checkSuspiciousURL(request.url);
-        urlCache.set(request.url, {isSuspicious, timestamp: Date.now()});
-        sendResponse({isSuspicious});
+        const newResult = memoizedAnalyzeURL(request.url);
+        sendResponse({isSuspicious: newResult.isSuspicious});
       }
       return true;
     case "exportLogs":
@@ -147,3 +146,8 @@ chrome.webRequest.onHeadersReceived.addListener(
   {urls: ["<all_urls>"]},
   ["responseHeaders"]
 );
+
+const memoizedAnalyzeURL = memoize((url) => {
+  const isSuspicious = checkSuspiciousURL(url);
+  return {isSuspicious, timestamp: Date.now()};
+}, (url) => url);
