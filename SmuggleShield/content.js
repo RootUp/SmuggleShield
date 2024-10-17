@@ -121,21 +121,13 @@ class HTMLSmugglingBlocker {
       'a[download][href^="data:"], a[download][href^="blob:"]'
     );
     console.log(`HTML Smuggling Blocker: Removed ${suspiciousElements.length} suspicious elements`);
-    suspiciousElements.forEach(el => this.removeElement(el));
-    return suspiciousElements.length;
+    return this.removeElements(suspiciousElements);
   }
 
   disableInlineScripts() {
     const inlineScripts = document.querySelectorAll('script:not([src])');
     console.log(`HTML Smuggling Blocker: Analyzing ${inlineScripts.length} inline scripts`);
-    let disabledCount = 0;
-    inlineScripts.forEach(script => {
-      if (this.isSuspiciousScript(script.textContent)) {
-        this.removeElement(script);
-        disabledCount++;
-      }
-    });
-    return disabledCount;
+    return this.removeElements(inlineScripts, (script) => this.isSuspiciousScript(script.textContent));
   }
 
   isSuspiciousScript(scriptContent) {
@@ -145,15 +137,13 @@ class HTMLSmugglingBlocker {
   neutralizeSVGScripts() {
     const svgScripts = document.querySelectorAll('svg script');
     console.log(`HTML Smuggling Blocker: Neutralized ${svgScripts.length} SVG scripts`);
-    svgScripts.forEach(el => this.removeElement(el));
-    return svgScripts.length;
+    return this.removeElements(svgScripts);
   }
 
   removeEmbedElements() {
     const embedElements = document.querySelectorAll('embed');
     console.log(`HTML Smuggling Blocker: Removed ${embedElements.length} embed elements`);
-    embedElements.forEach(el => this.removeElement(el));
-    return embedElements.length;
+    return this.removeElements(embedElements);
   }
 
   logWarning(elementsRemoved, scriptsDisabled, svgScriptsNeutralized, embedElementsRemoved, detectedPatterns) {
@@ -164,6 +154,17 @@ class HTMLSmugglingBlocker {
       message: message,
       patterns: detectedPatterns
     });
+  }
+
+  removeElements(elements, condition = () => true) {
+    let count = 0;
+    elements.forEach(el => {
+      if (condition(el)) {
+        this.removeElement(el);
+        count++;
+      }
+    });
+    return count;
   }
 
   removeElement(element) {
