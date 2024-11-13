@@ -13,38 +13,40 @@ class WeakLRUCache {
   constructor(maxSize) {
     this.maxSize = maxSize;
     this.cache = new Map();
-    this.keyMap = new WeakMap();
+    this.keyMap = new Map();
   }
 
   get(key) {
-    const keyObj = this.keyMap.get(key);
-    if (!keyObj) return undefined;
-    const value = this.cache.get(keyObj);
+    const keyString = this.getKeyString(key);
+    const value = this.cache.get(keyString);
     if (value) {
-      this.cache.delete(keyObj);
-      this.cache.set(keyObj, value);
+      this.cache.delete(keyString);
+      this.cache.set(keyString, value);
     }
     return value;
   }
 
   set(key, value) {
-    let keyObj = this.keyMap.get(key);
-    if (!keyObj) {
-      keyObj = { key };
-      this.keyMap.set(key, keyObj);
-    }
-    if (this.cache.has(keyObj)) {
-      this.cache.delete(keyObj);
+    const keyString = this.getKeyString(key);
+    if (this.cache.has(keyString)) {
+      this.cache.delete(keyString);
     } else if (this.cache.size >= this.maxSize) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
     }
-    this.cache.set(keyObj, value);
+    this.cache.set(keyString, value);
+    this.keyMap.set(keyString, key);
   }
 
   clear() {
     this.cache.clear();
-    this.keyMap = new WeakMap();
+    this.keyMap.clear();
+  }
+
+  getKeyString(key) {
+    return typeof key === 'object' ? 
+      JSON.stringify(key) : 
+      String(key);
   }
 }
 
