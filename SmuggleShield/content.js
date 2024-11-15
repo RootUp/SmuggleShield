@@ -45,12 +45,48 @@ class HTMLSmugglingBlocker {
       { pattern: /for\s*\([^)]+\)\s*\{[^}]*string\.fromcharcode\([^)]+\)/i, weight: 3 },
     ];
     this.threshold = 4;
-    this.setupListeners();
+    this.cache = new Map();
+    this.metrics = {
+      analysisTime: [],
+      matchCount: 0,
+      cacheHits: 0,
+      cacheMisses: 0
+    };
 
     this.suspiciousPatterns = this.suspiciousPatterns.map(({pattern, weight}) => ({
       pattern: new RegExp(pattern, 'is'),
-      weight
+      weight,
+      category: this.categorizePattern(pattern)
     }));
+
+    this.patternsByWeight = this.groupPatternsByWeight();
+    this.setupListeners();
+  }
+
+  categorizePattern(pattern) {
+    if (pattern.source.includes('blob') || pattern.source.includes('createobjecturl')) {
+      return 'blob';
+    } else if (pattern.source.includes('base64') || pattern.source.includes('atob')) {
+      return 'encoding';
+    }
+    return 'other';
+  }
+
+  groupPatternsByWeight() {
+    return this.suspiciousPatterns.reduce((acc, pattern) => {
+      acc[pattern.weight] = acc[pattern.weight] || [];
+      acc[pattern.weight].push(pattern);
+      return acc;
+    }, {});
+  }
+
+  getCacheKey(content) {
+    let hash = 0;
+    for (let i = 0; i < Math.min(content.length, 1000); i++) {
+      hash = ((hash << 5) - hash) + content.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return `${hash}_${content.length}`;
   }
 
   setupListeners() {
@@ -83,37 +119,86 @@ class HTMLSmugglingBlocker {
   }
 
   analyzeContent() {
-    console.log("HTML Smuggling Blocker: Analyzing content");
+    const startTime = performance.now();
     const htmlContent = document.documentElement.outerHTML;
+    const cacheKey = this.getCacheKey(htmlContent);
     
+    const cachedResult = this.cache.get(cacheKey);
+    if (cachedResult) {
+      this.metrics.cacheHits++;
+      if (cachedResult.score >= this.threshold) {
+        this.handleSuspiciousContent(cachedResult.detectedPatterns);
+      }
+      return;
+    }
+    
+    this.metrics.cacheMisses++;
     let score = 0;
     const detectedPatterns = [];
 
-    for (const {pattern, weight} of this.suspiciousPatterns) {
-      if (pattern.test(htmlContent)) {
-        score += weight;
-        detectedPatterns.push(pattern.toString());
-        if (score >= this.threshold) break; 
+    const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
+    
+    for (const weight of weights) {
+      for (const {pattern} of this.patternsByWeight[weight]) {
+        if (pattern.test(htmlContent)) {
+          score += parseInt(weight);
+          detectedPatterns.push(pattern.toString());
+          this.metrics.matchCount++;
+          if (score >= this.threshold) break;
+        }
       }
+      if (score >= this.threshold) break;
     }
 
-    if (score >= this.threshold) {
-      console.log("HTML Smuggling Blocker: Suspicious content detected");
-      this.blocked = true;
-      
-      const elementsRemoved = this.removeSuspiciousElements();
-      const scriptsDisabled = this.disableInlineScripts();
-      const svgScriptsNeutralized = this.neutralizeSVGScripts();
-      const embedElementsRemoved = this.removeEmbedElements();
+    this.cache.set(cacheKey, { score, detectedPatterns });
+    
+    if (this.cache.size > 1000) {
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
 
-      if (elementsRemoved > 0 || scriptsDisabled > 0 || svgScriptsNeutralized > 0 || embedElementsRemoved > 0) {
-        this.logWarning(elementsRemoved, scriptsDisabled, svgScriptsNeutralized, embedElementsRemoved, detectedPatterns);
-      }
+    this.metrics.analysisTime.push(performance.now() - startTime);
+
+    if (score >= this.threshold) {
+      this.handleSuspiciousContent(detectedPatterns);
     } else {
-      console.log("HTML Smuggling Blocker: No suspicious content detected");
       this.blocked = false;
       this.allowContent();
     }
+
+    if (this.metrics.analysisTime.length % 100 === 0) {
+      this.logPerformanceMetrics();
+    }
+  }
+
+  handleSuspiciousContent(detectedPatterns) {
+    this.blocked = true;
+    const elementsRemoved = this.removeSuspiciousElements();
+    const scriptsDisabled = this.disableInlineScripts();
+    const svgScriptsNeutralized = this.neutralizeSVGScripts();
+    const embedElementsRemoved = this.removeEmbedElements();
+
+    if (elementsRemoved > 0 || scriptsDisabled > 0 || 
+        svgScriptsNeutralized > 0 || embedElementsRemoved > 0) {
+      this.logWarning(
+        elementsRemoved, 
+        scriptsDisabled, 
+        svgScriptsNeutralized, 
+        embedElementsRemoved, 
+        detectedPatterns
+      );
+    }
+  }
+
+  logPerformanceMetrics() {
+    const avgAnalysisTime = this.metrics.analysisTime.reduce((a, b) => a + b, 0) / 
+                           this.metrics.analysisTime.length;
+    console.debug('Performance Metrics:', {
+      averageAnalysisTime: `${avgAnalysisTime.toFixed(2)}ms`,
+      cacheHitRate: `${(this.metrics.cacheHits / 
+                       (this.metrics.cacheHits + this.metrics.cacheMisses) * 100).toFixed(2)}%`,
+      totalMatches: this.metrics.matchCount
+    });
   }
 
   removeSuspiciousElements() {
