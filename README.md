@@ -7,8 +7,11 @@ SmuggleShield is an experimental browser extension that aims to prevent **basic*
 
 The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enable developer mode under extension settings and click on "Load unpacked" in the "SumggleSheild" folder. The extension would be up and running. Blocked URLs are stored in extension cache up to 10 days with blocked pattern, URL, and timestamp, which can be reviewed by clicking on extension then "Export Blocked Content Logs.". 
 
+## Incognito Mode Support
+SmuggleShield can protect against HTML smuggling attempts in incognito mode, but requires manual activation. To enable incognito protection: open Chrome's extension management page (`chrome://extensions/`), click "Details" on SmuggleShield, and toggle "Allow in incognito". Note: This setting is disabled by default as per Chrome's security policy. When enabled, the extension will maintain separate states for normal and incognito sessions to preserve privacy, while providing the same level of protection against HTML smuggling attempts in both modes.
+
 ## **Install from Chrome Web Store**
-- [SmuggleShield](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce)
+- [SmuggleShield](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce) - Currently, the GH version of this extension is more better than the one published on Chrome webstore.
 
 ![SmuggleShield_POC](https://github.com/user-attachments/assets/c8602882-cd1b-48fb-9512-642993aadf88)
 [Watch on Youtube](https://youtu.be/6x0Fe_63qxA)
