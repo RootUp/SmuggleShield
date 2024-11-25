@@ -43,6 +43,14 @@ class HTMLSmugglingBlocker {
       { pattern: /[^\w](\w+)\s*=\s*(\w+)\s*\^\s*(\w+)/i, weight: 2 },
       { pattern: /\.slice\(\s*\w+\s*-\s*\d+\s*,\s*\w+\s*-\s*\d+\s*\)/i, weight: 2 },
       { pattern: /for\s*\([^)]+\)\s*\{[^}]*string\.fromcharcode\([^)]+\)/i, weight: 3 },
+      { pattern: /\$wnd\s*=\s*window;\s*\$doc\s*=\s*\$wnd\.document/i, weight: 4 },
+      { pattern: /__gwt_(?:isKnownPropertyValue|getMetaProperty|marker|stylesLoaded|scriptsLoaded)/i, weight: 4 },
+      { pattern: /\$strongName\s*=\s*['"][0-9A-F]{32}['"]/i, weight: 3 },
+      { pattern: /\$gwt_version\s*=\s*['"][0-9.]+['"]/i, weight: 3 },
+      { pattern: /(?:function|var)\s+[a-zA-Z$_]+\s*=\s*\{\s*[a-zA-Z$_]+:\s*window,\s*[a-zA-Z$_]+:\s*document\s*\}/i, weight: 4 },
+      { pattern: /\b(?:gwtOnLoad|__gwtStatsEvent|gwtOnLoadFunc)\b/i, weight: 3 },
+      { pattern: /\.setAttribute\(['"]__gwt_property['"]/i, weight: 3 },
+      { pattern: /document\.createElement\(['"]script['"]\).*?\.src\s*=.*?\.cache\.js/i, weight: 4 }
     ];
     this.threshold = 4;
     this.cache = new Map();
@@ -82,7 +90,8 @@ class HTMLSmugglingBlocker {
 
   getCacheKey(content) {
     let hash = 0;
-    for (let i = 0; i < Math.min(content.length, 1000); i++) {
+    const len = Math.min(content.length, 500);
+    for (let i = 0; i < len; i++) {
       hash = ((hash << 5) - hash) + content.charCodeAt(i);
       hash = hash & hash;
     }
