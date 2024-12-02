@@ -4,45 +4,113 @@ const CacheManager = {
   cache: new Map(),
   maxSize: 100,
   maxAge: 5 * 60 * 1000,
+  head: null,
+  tail: null,
+
+  createNode(key, value) {
+    return {
+      key,
+      value,
+      timestamp: Date.now(),
+      prev: null,
+      next: null
+    };
+  },
+
+  moveToFront(node) {
+    if (node === this.head) return;
+
+    const prev = node.prev;
+    const next = node.next;
+
+    if (prev) prev.next = next;
+    if (next) next.prev = prev;
+    if (this.tail === node) this.tail = prev;
+
+    node.next = this.head;
+    node.prev = null;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    if (!this.tail) this.tail = node;
+  },
 
   set(key, value) {
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+    let node = this.cache.get(key);
+    
+    if (node) {
+      node.value = value;
+      node.timestamp = Date.now();
+      this.moveToFront(node);
+      return;
     }
-    this.cache.set(key, {
-      value,
-      timestamp: Date.now()
-    });
+
+    node = this.createNode(key, value);
+    
+    if (this.cache.size >= this.maxSize) {
+      this.cache.delete(this.tail.key);
+      this.tail = this.tail.prev;
+      if (this.tail) this.tail.next = null;
+    }
+
+    this.cache.set(key, node);
+    
+    if (!this.head) {
+      this.head = node;
+      this.tail = node;
+    } else {
+      node.next = this.head;
+      this.head.prev = node;
+      this.head = node;
+    }
   },
 
   get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    
-    if (Date.now() - entry.timestamp > this.maxAge) {
-      this.cache.delete(key);
+    const node = this.cache.get(key);
+    if (!node) return null;
+
+    if (Date.now() - node.timestamp > this.maxAge) {
+      this.remove(key);
       return null;
     }
-    
-    return entry.value;
+
+    this.moveToFront(node);
+    return node.value;
+  },
+
+  remove(key) {
+    const node = this.cache.get(key);
+    if (!node) return;
+
+    if (node.prev) node.prev.next = node.next;
+    if (node.next) node.next.prev = node.prev;
+    if (this.head === node) this.head = node.next;
+    if (this.tail === node) this.tail = node.prev;
+
+    this.cache.delete(key);
   },
 
   clear() {
     this.cache.clear();
+    this.head = null;
+    this.tail = null;
   },
 
   cleanup() {
     const now = Date.now();
-    for (const [key, entry] of this.cache.entries()) {
-      if (now - entry.timestamp > this.maxAge) {
-        this.cache.delete(key);
+    for (const [key, node] of this.cache) {
+      if (now - node.timestamp > this.maxAge) {
+        this.remove(key);
       }
     }
   }
 };
 
-setInterval(() => CacheManager.cleanup(), 60000);
+const cleanupInterval = setInterval(() => CacheManager.cleanup(), 60000);
+
+window.addEventListener('unload', () => {
+  clearInterval(cleanupInterval);
+  CacheManager.clear();
+});
 
 function debounce(func, wait) {
   let timeout;
@@ -158,3 +226,10 @@ document.addEventListener('DOMContentLoaded', () => {
     CacheManager.clear();
   });
 });
+
+setInterval(() => {
+  const stats = CacheManager.getStats();
+  if (stats.size > stats.maxSize * 0.9) {
+    console.debug('Cache nearly full:', stats);
+  }
+}, 300000);
