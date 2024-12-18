@@ -151,16 +151,26 @@ class HTMLSmugglingBlocker {
 
     const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
     
+    let shouldTerminate = false;
+
     for (const weight of weights) {
-      for (const {pattern} of this.patternsByWeight[weight]) {
+      if (shouldTerminate || score >= this.threshold) {
+        break;
+      }
+
+      const patterns = this.patternsByWeight[weight];
+      for (const {pattern, weight: patternWeight} of patterns) {
         if (pattern.test(htmlContent)) {
-          score += parseInt(weight);
+          score += patternWeight;
           detectedPatterns.push(pattern.toString());
           this.metrics.matchCount++;
-          if (score >= this.threshold) break;
+          
+          if (score >= this.threshold) {
+            shouldTerminate = true;
+            break;
+          }
         }
       }
-      if (score >= this.threshold) break;
     }
 
     this.cache.set(cacheKey, { score, detectedPatterns });
@@ -170,10 +180,12 @@ class HTMLSmugglingBlocker {
       this.cache.delete(firstKey);
     }
 
-    this.metrics.analysisTime.push(performance.now() - startTime);
+    const analysisTime = performance.now() - startTime;
+    this.metrics.analysisTime.push(analysisTime);
 
     if (score >= this.threshold) {
       this.handleSuspiciousContent(detectedPatterns);
+      console.debug(`Content blocked after checking ${this.metrics.matchCount} patterns. Analysis time: ${analysisTime.toFixed(2)}ms`);
     } else {
       this.blocked = false;
       this.allowContent();
@@ -210,7 +222,9 @@ class HTMLSmugglingBlocker {
       averageAnalysisTime: `${avgAnalysisTime.toFixed(2)}ms`,
       cacheHitRate: `${(this.metrics.cacheHits / 
                        (this.metrics.cacheHits + this.metrics.cacheMisses) * 100).toFixed(2)}%`,
-      totalMatches: this.metrics.matchCount
+      totalMatches: this.metrics.matchCount,
+      patternsChecked: this.metrics.matchCount,
+      earlyTerminations: this.metrics.earlyTerminations || 0
     });
   }
 
@@ -279,6 +293,16 @@ class HTMLSmugglingBlocker {
   handleSuspiciousHeaders() {
     console.log("Suspicious headers detected");
     this.analyzeContent();
+  }
+
+  debugPatternMatch(pattern, content, weight) {
+    if (this.debugMode) {
+      console.debug(`Pattern match [weight: ${weight}]:`, {
+        pattern: pattern.toString(),
+        contentPreview: content.substring(0, 100) + '...',
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 }
 
