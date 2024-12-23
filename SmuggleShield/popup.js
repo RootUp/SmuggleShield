@@ -217,6 +217,7 @@ function showNotification(type, message) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const exportButton = document.getElementById('export-logs');
+  const mlMetricsDiv = document.getElementById('ml-metrics');
   
   const debouncedExport = debounce(handleExport, 300);
   
@@ -225,6 +226,49 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('unload', () => {
     CacheManager.clear();
   });
+
+  async function updateMLMetrics() {
+    try {
+      console.log('Fetching ML metrics...');
+      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      
+      if (!tab) {
+        console.error('No active tab found');
+        mlMetricsDiv.innerHTML = '<p>Error: No active tab</p>';
+        return;
+      }
+
+      console.log('Sending message to tab:', tab.id);
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: "getMLMetrics"
+      });
+      
+      console.log('Received response:', response);
+      
+      if (response?.metrics) {
+        const metrics = response.metrics;
+        mlMetricsDiv.innerHTML = `
+          <p>Model Accuracy: ${(metrics.accuracy * 100).toFixed(2)}%</p>
+          <p>Total Detections: ${metrics.totalDetections}</p>
+          <p>Average Confidence: ${(metrics.averageConfidence * 100).toFixed(2)}%</p>
+          <p>Top Features:</p>
+          <ul>
+            ${metrics.topFeatures.map(f => 
+              `<li>${f.feature}: ${(f.importance * 100).toFixed(2)}%</li>`
+            ).join('')}
+          </ul>
+        `;
+      } else {
+        mlMetricsDiv.innerHTML = '<p>No metrics data available</p>';
+      }
+    } catch (error) {
+      console.error('Error updating ML metrics:', error);
+      mlMetricsDiv.innerHTML = `<p>Error loading ML metrics: ${error.message}</p>`;
+    }
+  }
+
+  updateMLMetrics();
+  setInterval(updateMLMetrics, 5000);
 });
 
 setInterval(() => {
