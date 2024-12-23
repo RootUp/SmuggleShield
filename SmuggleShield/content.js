@@ -1,3 +1,5 @@
+const mlDetector = new MLDetector();
+
 class HTMLSmugglingBlocker {
   constructor() {
     this.blocked = false;    
@@ -73,6 +75,9 @@ class HTMLSmugglingBlocker {
 
     this.patternsByWeight = this.groupPatternsByWeight();
     this.setupListeners();
+
+    this.mlEnabled = true;
+    this.feedbackDelay = 2000;
   }
 
   categorizePattern(pattern) {
@@ -112,6 +117,18 @@ class HTMLSmugglingBlocker {
         sendResponse({blocked: this.blocked});
       } else if (request.action === "suspiciousHeadersDetected") {
         this.handleSuspiciousHeaders();
+      } else if (request.action === "getMLMetrics") {
+        const mlReport = mlDetector.monitor.getPerformanceReport();
+        sendResponse({
+          metrics: {
+            accuracy: mlReport.accuracy,
+            totalDetections: mlReport.totalDetections,
+            averageConfidence: mlReport.averageConfidence,
+            topFeatures: mlReport.topFeatures,
+            recentPerformance: mlReport.recentPerformance
+          }
+        });
+        return true;
       }
     });
 
@@ -131,9 +148,31 @@ class HTMLSmugglingBlocker {
     });
   }
 
-  analyzeContent() {
+  async analyzeContent() {
     const startTime = performance.now();
     const htmlContent = document.documentElement.outerHTML;
+    
+    const patternResult = this.analyzeWithPatterns(htmlContent);
+    
+    const mlResult = this.mlEnabled ? mlDetector.detect(htmlContent) : null;
+    
+    const isSuspicious = patternResult.isSuspicious || (mlResult?.isSmuggling || false);
+    
+    if (isSuspicious) {
+      this.handleSuspiciousContent(patternResult.detectedPatterns);
+      
+      setTimeout(() => {
+        if (this.blocked) {
+          mlDetector.learn(htmlContent, true);
+        }
+      }, this.feedbackDelay);
+    } else {
+      this.blocked = false;
+      this.allowContent();
+      
+      mlDetector.learn(htmlContent, false);
+    }
+    
     const cacheKey = this.getCacheKey(htmlContent);
     
     const cachedResult = this.cache.get(cacheKey);
@@ -183,17 +222,43 @@ class HTMLSmugglingBlocker {
     const analysisTime = performance.now() - startTime;
     this.metrics.analysisTime.push(analysisTime);
 
-    if (score >= this.threshold) {
-      this.handleSuspiciousContent(detectedPatterns);
-      console.debug(`Content blocked after checking ${this.metrics.matchCount} patterns. Analysis time: ${analysisTime.toFixed(2)}ms`);
-    } else {
-      this.blocked = false;
-      this.allowContent();
-    }
-
     if (this.metrics.analysisTime.length % 100 === 0) {
       this.logPerformanceMetrics();
     }
+  }
+
+  analyzeWithPatterns(content) {
+    let score = 0;
+    const detectedPatterns = [];
+    
+    const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
+    
+    let shouldTerminate = false;
+
+    for (const weight of weights) {
+      if (shouldTerminate || score >= this.threshold) {
+        break;
+      }
+
+      const patterns = this.patternsByWeight[weight];
+      for (const {pattern, weight: patternWeight} of patterns) {
+        if (pattern.test(content)) {
+          score += patternWeight;
+          detectedPatterns.push(pattern.toString());
+          this.metrics.matchCount++;
+          
+          if (score >= this.threshold) {
+            shouldTerminate = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      isSuspicious: score >= this.threshold,
+      detectedPatterns
+    };
   }
 
   handleSuspiciousContent(detectedPatterns) {
@@ -303,6 +368,24 @@ class HTMLSmugglingBlocker {
         timestamp: new Date().toISOString()
       });
     }
+  }
+
+  verifyMLSystem() {
+    const testContent = `
+      <script>
+        const blob = new Blob(['suspicious content'], {type: 'application/octet-stream'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'test.bin';
+        a.click();
+      </script>
+    `;
+    
+    const result = mlDetector.detect(testContent);
+    console.log('ML Test Result:', result);
+    console.log('ML Performance:', mlDetector.monitor.getPerformanceReport());
+    return result;
   }
 }
 
