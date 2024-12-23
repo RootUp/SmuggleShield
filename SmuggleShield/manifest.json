@@ -7,7 +7,8 @@
   "permissions": [
     "webRequest",
     "storage",
-    "tabs"
+    "tabs",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -18,7 +19,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["ml_monitor.js", "ml_detector.js", "content.js"],
       "run_at": "document_start"
     }
   ],
