@@ -4,11 +4,17 @@
   "version": "2.0",
   "description": "Basic protection against HTML smuggling attempts.",
   "author": "Dhiraj Mishra (@RandomDhiraj)",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "permissions": [
     "webRequest",
     "storage",
     "tabs",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "webNavigation",
+    "webRequest.filterResponseData"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -39,5 +45,9 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
   },
+  "web_accessible_resources": [{
+    "resources": ["icon/SmuggleShield.png"],
+    "matches": ["<all_urls>"]
+  }],
   "incognito": "split"
 }

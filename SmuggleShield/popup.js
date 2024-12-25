@@ -269,6 +269,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateMLMetrics();
   setInterval(updateMLMetrics, 5000);
+
+  document.getElementById('open-settings').addEventListener('click', () => {
+    // Get the URL for the options page
+    const optionsUrl = chrome.runtime.getURL('options.html');
+    // Open in a new tab
+    chrome.tabs.create({ url: optionsUrl });
+  });
 });
 
 setInterval(() => {
