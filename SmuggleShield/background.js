@@ -214,7 +214,7 @@ class ContentAnalyzer {
     this.analysisQueue = new Set();
     this.isProcessing = false;
     this.lastAnalysis = 0;
-    this.minAnalysisInterval = 300; // ms between analyses
+    this.minAnalysisInterval = 300; 
   }
 
   queueForAnalysis(element) {
@@ -350,3 +350,20 @@ function setupObserver() {
 
   contentAnalyzer.queueForAnalysis(document.documentElement);
 }
+
+chrome.action.onClicked.addListener((tab) => {
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('main.html'),
+    active: true
+  });
+});
+
+
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+  if (request.action === "whitelistUpdated") {
+    const result = await chrome.storage.local.get('whitelist');
+    const whitelist = result.whitelist || [];
+    console.log('Whitelist updated:', whitelist);
+    return true;
+  }
+});

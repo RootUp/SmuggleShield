@@ -5,7 +5,7 @@
   "description": "Basic protection against HTML smuggling attempts.",
   "author": "Dhiraj Mishra (@RandomDhiraj)",
   "options_ui": {
-    "page": "options.html",
+    "page": "main.html",
     "open_in_tab": true
   },
   "permissions": [
@@ -30,7 +30,6 @@
     }
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon/SmuggleShield.png",
       "48": "icon/SmuggleShield.png",

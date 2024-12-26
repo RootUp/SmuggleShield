@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SmuggleShield Dashboard</title>
+    <style>
+        :root {
+            
+            --bg-primary: #000000;
+            --bg-secondary: #1c1c1c;
+            --text-primary: #ffffff;
+            --text-secondary: #888888;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --hover-bg: #242424;
+        }
+
+        
+        :root[data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --text-primary: #000000;
+            --text-secondary: #666666;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --hover-bg: #eeeeee;
+        }
+
+        
+        .theme-toggle {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: var(--text-primary);
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            margin: 0 auto;
+            width: fit-content;
+        }
+
+        .theme-toggle:hover {
+            background-color: rgba(0, 0, 0, 0.8);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .theme-toggle svg {
+            width: 16px;
+            height: 16px;
+            stroke: currentColor;
+        }
+
+        
+        :root[data-theme="light"] .theme-toggle {
+            background-color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0, 0, 0, 0.1);
+            color: var(--text-primary);
+        }
+
+        :root[data-theme="light"] .theme-toggle:hover {
+            background-color: rgba(255, 255, 255, 1);
+            border-color: rgba(0, 0, 0, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Consolas', 'Courier New', monospace;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 280px;
+            background-color: var(--bg-secondary);
+            padding: 20px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+            background: var(--bg-primary);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 10px;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            width: 32px;
+            height: 32px;
+        }
+
+        .title {
+            color: var(--text-primary);
+            font-size: 24px;
+            font-weight: normal;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .nav-item:hover {
+            background-color: var(--hover-bg);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background-color: var(--hover-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .section {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            color: var(--text-primary);
+            font-size: 20px;
+            margin-bottom: 20px;
+            font-weight: normal;
+        }
+
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        input[type="url"] {
+            flex: 1;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 10px;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        input[type="url"]:focus {
+            outline: none;
+            border-color: var(--text-primary);
+        }
+
+        button {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: var(--hover-bg);
+        }
+
+        .url-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .url-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .url-item:hover {
+            background: var(--hover-bg);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .metric-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 4px;
+        }
+
+        .metric-card:hover {
+            background: var(--hover-bg);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 4px;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .footer {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+        }
+
+        .footer-container {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 20px;
+        }
+
+        .footer-line {
+            border-top: 1px solid var(--border-color);
+            width: 100%;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <img src="icon/SmuggleShield.png" alt="SmuggleShield Logo" class="logo">
+                <h1 class="title">SmuggleShield</h1>
+            </div>
+            <nav class="nav-menu">
+                <div class="nav-item active" data-section="whitelist">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    Whitelist Manager
+                </div>
+                <div class="nav-item" data-section="metrics">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                    ML Metrics
+                </div>
+                <div class="nav-item" data-section="logs">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    </svg>
+                    Activity Logs
+                </div>
+            </nav>
+            <div class="footer-container">
+                <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <span id="themeText">🌙 Light Mode</span>
+                </button>
+                <div class="footer-line"></div>
+                <div class="footer">
+                    © 2024 SmuggleShield by 
+                    <a href="https://x.com/RandomDhiraj" target="_blank">@RandomDhiraj</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="section" id="whitelist-section">
+                <h2 class="section-title">Whitelisted URLs</h2>
+                <p>URLs added here will bypass SmuggleShield's security checks.</p>
+                
+                <div class="url-input">
+                    <input type="url" id="urlInput" placeholder="Enter URL (e.g., https://example.com)" />
+                    <button id="addUrl">Add URL</button>
+                </div>
+
+                <div id="urlList" class="url-list">
+                    
+                </div>
+            </div>
+
+            <div class="section" id="metrics-section" style="display: none;">
+                <h2 class="section-title">ML Performance Metrics</h2>
+                <div class="metrics-grid" id="ml-metrics">
+                    
+                </div>
+            </div>
+
+            <div class="section" id="logs-section" style="display: none;">
+                <h2 class="section-title">Activity Logs</h2>
+                <button id="export-logs">Export Blocked Content Logs</button>
+                <div id="logs-content">
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="main.js"></script>
+</body>
+</html> 

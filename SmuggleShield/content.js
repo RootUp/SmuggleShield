@@ -119,10 +119,9 @@ class HTMLSmugglingBlocker {
       this.removeEmbedElements = () => 0;
       this.removeElement = () => {};
       
-      // Allow all content
+      
       this.allowContent();
       
-      // Remove any existing blocks
       document.querySelectorAll('script').forEach(script => {
         script.removeAttribute('type');
       });
@@ -157,7 +156,7 @@ class HTMLSmugglingBlocker {
   }
 
   setupListeners() {
-    // Listen for whitelist status from background script
+    
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === "setWhitelisted") {
         console.log('Received whitelist status:', request.value);
@@ -190,7 +189,7 @@ class HTMLSmugglingBlocker {
 
     this.setupObserver();
     
-    // Initial content check only if not whitelisted
+    
     if (!this.isUrlWhitelisted) {
       this.analyzeContent();
     }
