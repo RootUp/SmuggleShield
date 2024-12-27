@@ -38,4 +38,4 @@ https://github.com/user-attachments/assets/8d97fdcf-b3d2-4ddb-a846-0900e333b7fe
 I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
 
 ## Privacy Policy
-- [Privacy Policy for SmuggleShield](https://www.inputzero.io/p/smuggelsheild.html)
+[Privacy Policy for SmuggleShield](https://www.inputzero.io/p/smuggelsheild.html)
