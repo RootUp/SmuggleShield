@@ -22,18 +22,20 @@ SmuggleShield can protect against HTML smuggling attempts in incognito mode, but
 
 https://github.com/user-attachments/assets/8d97fdcf-b3d2-4ddb-a846-0900e333b7fe
 
-## **Install from Chrome Web Store**
-- [SmuggleShield](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce) - Currently, the GitHub version of this extension is more better than the one published on Chrome webstore.
+## Install from Chrome Web Store
+- [SmuggleShield](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce) - Currently, the GitHub version is more better than the one published on Chrome webstore.
 
-## **SmuggleShield Could Have Prevented**
+## SmuggleShield Could Have Prevented
 
-- [Quakbot- 14072022](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)
-- [Pikabot | TA577 | 1.1.15-ghost](https://github.com/pr0xylife/Pikabot/blob/main/Pikabot_01.11.2023.txt)
-- [A malspam campaign delivering AsyncRAT](https://x.com/RandomDhiraj/status/1854182495337476211)
-- [HTML smuggling is delivering DCRat malware, bypassing traditional security controls by embedding malicious payloads in HTML files. This advanced technique poses a global threat to unsuspecting users](https://x.com/RandomDhiraj/status/1839717748970021027)
+| **Sr. No.** | **Details**                                | **Reference**                                                                                                                 |
+|-------------|--------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| 1           | Quakbot campaign (14th July 2022)          | [GitHub](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)                                    |
+| 2           | DCRat malware via HTML Smuggling           | [X (Twitter)](https://x.com/RandomDhiraj/status/1839717748970021027)                                                       |
+| 3           | Pikabot (TA577, Version 1.1.15-ghost)      | [GitHub](https://github.com/pr0xylife/Pikabot/blob/main/Pikabot_01.11.2023.txt)                                            |
+| 4           | AsyncRAT delivered via malspam campaign    | [X (Twitter)](https://x.com/RandomDhiraj/status/1854182495337476211)                                                       |
 
 ## Special Thanks
 I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
 
-## **Privacy Policy**
+## Privacy Policy
 - [Privacy Policy for SmuggleShield](https://www.inputzero.io/p/smuggelsheild.html)
