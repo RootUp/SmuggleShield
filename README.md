@@ -7,7 +7,11 @@ SmuggleShield is a browser extension that aims to prevent **basic** HTML smuggli
 
 The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enable developer mode under extension settings and click on "Load unpacked" in the "SumggleSheild" folder. The extension would be up and running. Blocked URLs are stored in extension cache up to 10 days with blocked pattern, URL, and timestamp, which can be reviewed by clicking on extension then "Export Blocked Content Logs", the current stable version also has key fatures such as "URL Whitelisting" because sometimes SmuggleShield could take few seconds extra to load a page because it scans every elements of the webpage but with this key feature (URL Whitelisting) you can reduce the overhead 
 
-## Machine Learning Integration
+## Extension Workflow
+
+![SmuggleShield-Workflow](https://github.com/user-attachments/assets/a42d9f8d-3968-42c8-b0e8-a9507defa197)
+
+## Machine Learning Integration & Workflow
 
 First, the `HTMLSmugglingBlocker` analyzes webpage content and combines both pattern-based detection and ML-based analysis. The MLDetector then extracts six key features (`base64Length`, `blobUsage`, `downloadAttr`, `scriptDensity`, `encodingFunctions`, `binaryManipulation`) and makes predictions using a **0.75** confidence threshold. Then its a continuous learning loop where the `MLMonitor` tracks performance metrics and feeds results back to improve detection accuracy, with all learned patterns persisted in `chrome.storage.local` for adaptation to new threats.
 
