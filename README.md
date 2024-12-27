@@ -13,6 +13,8 @@ First, the `HTMLSmugglingBlocker` analyzes webpage content and combines both pat
 
 ![SmuggleShield-ML](https://github.com/user-attachments/assets/043b9f32-b28f-437f-a7c6-1f59e705dc22)
 
+https://github.com/user-attachments/assets/8b8f1333-6a99-4979-bc17-56026a048ba8
+
 ## Incognito Mode Support
 SmuggleShield can protect against HTML smuggling attempts in incognito mode, but requires manual activation. To enable incognito protection: open Chrome's extension management page (`chrome://extensions/`), click "**Details**" on SmuggleShield, and toggle "**Allow in incognito**". Note: This setting is disabled by default as per Chrome's security policy. When enabled, the extension will maintain separate states for normal and incognito sessions to preserve privacy, while providing the same level of protection against HTML smuggling attempts in both modes.
 
