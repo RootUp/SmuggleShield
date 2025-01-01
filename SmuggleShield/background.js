@@ -7,6 +7,7 @@ const config = {
   suspiciousHeaders: ['content-disposition', 'content-type'],
   logRetentionDays: 10,
   cacheDurationMs: 5 * 60 * 1000,
+  whitelistEnabled: true
 };
 
 class WeakLRUCache {
@@ -79,6 +80,68 @@ function debounce(func, delay) {
 
 const debouncedLogBlockedContent = debounce(logBlockedContent, 1000);
 
+async function isWhitelisted(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    const result = await chrome.storage.local.get('whitelist');
+    const whitelist = result.whitelist || [];
+    console.log('Background checking whitelist for:', hostname, 'Whitelist:', whitelist);
+    return whitelist.includes(hostname);
+  } catch (error) {
+    console.error('Error checking whitelist:', error);
+    return false;
+  }
+}
+
+chrome.webNavigation.onCommitted.addListener(async (details) => {
+  if (details.frameId === 0) { // Main frame only
+    const isWhitelistedUrl = await isWhitelisted(details.url);
+    if (isWhitelistedUrl) {
+      chrome.tabs.sendMessage(details.tabId, {
+        action: "setWhitelisted",
+        value: true
+      }).catch(error => console.debug('Tab not ready yet:', error));
+    }
+  }
+});
+
+chrome.webRequest.onBeforeRequest.addListener(
+  async (details) => {
+    if (await isWhitelisted(details.url)) {
+      console.log('URL is whitelisted, allowing request:', details.url);
+      return { cancel: false };
+    }
+
+    const isSuspiciousUrl = checkSuspiciousURL(details.url);
+    
+    if (isSuspiciousUrl) {
+      console.log('Suspicious URL detected:', details.url);
+      return { cancel: true };
+    }
+
+    return { cancel: false };
+  },
+  {urls: ["<all_urls>"]},
+  ["blocking"]
+);
+
+chrome.webRequest.onHeadersReceived.addListener(
+  async (details) => {
+    if (await isWhitelisted(details.url)) {
+      return { responseHeaders: details.responseHeaders };
+    }
+
+    const hasSuspiciousHeaders = checkSuspiciousHeaders(details.responseHeaders);
+    if (hasSuspiciousHeaders) {
+      chrome.tabs.sendMessage(details.tabId, {action: "suspiciousHeadersDetected"})
+        .catch(error => console.error('Error sending message:', error));
+    }
+    return {responseHeaders: details.responseHeaders};
+  },
+  {urls: ["<all_urls>"]},
+  ["responseHeaders"]
+);
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request);
   switch (request.action) {
@@ -87,13 +150,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.warn(request.message);
       break;
     case "analyzeURL":
-      const result = memoizedAnalyzeURL(request.url);
-      if (Date.now() - result.timestamp < config.cacheDurationMs) {
-        sendResponse({isSuspicious: result.isSuspicious});
-      } else {
-        const newResult = memoizedAnalyzeURL(request.url);
-        sendResponse({isSuspicious: newResult.isSuspicious});
-      }
+      isWhitelisted(request.url).then(whitelisted => {
+        if (whitelisted) {
+          sendResponse({isSuspicious: false, whitelisted: true});
+        } else {
+          const result = memoizedAnalyzeURL(request.url);
+          if (Date.now() - result.timestamp < config.cacheDurationMs) {
+            sendResponse({isSuspicious: result.isSuspicious, whitelisted: false});
+          } else {
+            const newResult = memoizedAnalyzeURL(request.url);
+            sendResponse({isSuspicious: newResult.isSuspicious, whitelisted: false});
+          }
+        }
+      });
       return true;
     case "exportLogs":
       chrome.storage.local.get(['blockedLogs'], result => {
@@ -134,21 +203,6 @@ const checkSuspiciousHeaders = memoize((headers) => {
   );
 }, (headers) => JSON.stringify(headers));
 
-chrome.webRequest.onHeadersReceived.addListener(
-  (details) => {
-    const hasSuspiciousHeaders = checkSuspiciousHeaders(details.responseHeaders);
-
-    if (hasSuspiciousHeaders) {
-      chrome.tabs.sendMessage(details.tabId, {action: "suspiciousHeadersDetected"})
-        .catch(error => console.error('Error sending message:', error));
-    }
-
-    return {responseHeaders: details.responseHeaders};
-  },
-  {urls: ["<all_urls>"]},
-  ["responseHeaders"]
-);
-
 const memoizedAnalyzeURL = memoize((url) => {
   const isSuspicious = checkSuspiciousURL(url);
   return {isSuspicious, timestamp: Date.now()};
@@ -160,7 +214,7 @@ class ContentAnalyzer {
     this.analysisQueue = new Set();
     this.isProcessing = false;
     this.lastAnalysis = 0;
-    this.minAnalysisInterval = 300; // ms between analyses
+    this.minAnalysisInterval = 300; 
   }
 
   queueForAnalysis(element) {
@@ -296,3 +350,20 @@ function setupObserver() {
 
   contentAnalyzer.queueForAnalysis(document.documentElement);
 }
+
+chrome.action.onClicked.addListener((tab) => {
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('main.html'),
+    active: true
+  });
+});
+
+
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+  if (request.action === "whitelistUpdated") {
+    const result = await chrome.storage.local.get('whitelist');
+    const whitelist = result.whitelist || [];
+    console.log('Whitelist updated:', whitelist);
+    return true;
+  }
+});

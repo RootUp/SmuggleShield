@@ -1,3 +1,5 @@
+const mlDetector = new MLDetector();
+
 class HTMLSmugglingBlocker {
   constructor() {
     this.blocked = false;    
@@ -73,6 +75,57 @@ class HTMLSmugglingBlocker {
 
     this.patternsByWeight = this.groupPatternsByWeight();
     this.setupListeners();
+
+    this.mlEnabled = true;
+    this.feedbackDelay = 2000;
+    this.isUrlWhitelisted = false;
+    this.checkInitialWhitelist();
+  }
+
+  async checkInitialWhitelist() {
+    try {
+      const hostname = window.location.hostname;
+      const result = await chrome.storage.local.get('whitelist');
+      const whitelist = result.whitelist || [];
+      console.log('Checking whitelist for:', hostname, 'Whitelist:', whitelist);
+      this.isUrlWhitelisted = whitelist.includes(hostname);
+      console.log('Is URL whitelisted?', this.isUrlWhitelisted);
+      if (this.isUrlWhitelisted) {
+        this.setWhitelistMode(true);
+      }
+    } catch (error) {
+      console.error('Error checking whitelist:', error);
+      this.isUrlWhitelisted = false;
+    }
+  }
+
+  setWhitelistMode(enabled) {
+    this.isUrlWhitelisted = enabled;
+    this.blocked = false;
+    
+    if (enabled) {
+      // Override all blocking methods
+      this.analyzeContent = () => {
+        console.log('Skipping analysis - URL is whitelisted');
+        return;
+      };
+      this.handleSuspiciousContent = () => {
+        console.log('Skipping blocking - URL is whitelisted');
+        return;
+      };
+      this.removeSuspiciousElements = () => 0;
+      this.disableInlineScripts = () => 0;
+      this.neutralizeSVGScripts = () => 0;
+      this.removeEmbedElements = () => 0;
+      this.removeElement = () => {};
+      
+      
+      this.allowContent();
+      
+      document.querySelectorAll('script').forEach(script => {
+        script.removeAttribute('type');
+      });
+    }
   }
 
   categorizePattern(pattern) {
@@ -103,19 +156,43 @@ class HTMLSmugglingBlocker {
   }
 
   setupListeners() {
-    this.analyzeContent();
-
+    
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === "analyzeContent") {
+      if (request.action === "setWhitelisted") {
+        console.log('Received whitelist status:', request.value);
+        this.setWhitelistMode(request.value);
+        return;
+      }
+      
+      if (request.action === "whitelistUpdated") {
+        this.checkInitialWhitelist();
+      } else if (request.action === "analyzeContent") {
         this.analyzeContent();
       } else if (request.action === "getBlockedStatus") {
         sendResponse({blocked: this.blocked});
       } else if (request.action === "suspiciousHeadersDetected") {
         this.handleSuspiciousHeaders();
+      } else if (request.action === "getMLMetrics") {
+        const mlReport = mlDetector.monitor.getPerformanceReport();
+        sendResponse({
+          metrics: {
+            accuracy: mlReport.accuracy,
+            totalDetections: mlReport.totalDetections,
+            averageConfidence: mlReport.averageConfidence,
+            topFeatures: mlReport.topFeatures,
+            recentPerformance: mlReport.recentPerformance
+          }
+        });
+        return true;
       }
     });
 
     this.setupObserver();
+    
+    
+    if (!this.isUrlWhitelisted) {
+      this.analyzeContent();
+    }
   }
 
   setupObserver() {
@@ -131,9 +208,36 @@ class HTMLSmugglingBlocker {
     });
   }
 
-  analyzeContent() {
+  async analyzeContent() {
+    if (this.isUrlWhitelisted) {
+      console.log('URL is whitelisted, skipping analysis');
+      return;
+    }
+    
     const startTime = performance.now();
     const htmlContent = document.documentElement.outerHTML;
+    
+    const patternResult = this.analyzeWithPatterns(htmlContent);
+    
+    const mlResult = this.mlEnabled ? mlDetector.detect(htmlContent) : null;
+    
+    const isSuspicious = patternResult.isSuspicious || (mlResult?.isSmuggling || false);
+    
+    if (isSuspicious) {
+      this.handleSuspiciousContent(patternResult.detectedPatterns);
+      
+      setTimeout(() => {
+        if (this.blocked) {
+          mlDetector.learn(htmlContent, true);
+        }
+      }, this.feedbackDelay);
+    } else {
+      this.blocked = false;
+      this.allowContent();
+      
+      mlDetector.learn(htmlContent, false);
+    }
+    
     const cacheKey = this.getCacheKey(htmlContent);
     
     const cachedResult = this.cache.get(cacheKey);
@@ -183,20 +287,51 @@ class HTMLSmugglingBlocker {
     const analysisTime = performance.now() - startTime;
     this.metrics.analysisTime.push(analysisTime);
 
-    if (score >= this.threshold) {
-      this.handleSuspiciousContent(detectedPatterns);
-      console.debug(`Content blocked after checking ${this.metrics.matchCount} patterns. Analysis time: ${analysisTime.toFixed(2)}ms`);
-    } else {
-      this.blocked = false;
-      this.allowContent();
-    }
-
     if (this.metrics.analysisTime.length % 100 === 0) {
       this.logPerformanceMetrics();
     }
   }
 
+  analyzeWithPatterns(content) {
+    let score = 0;
+    const detectedPatterns = [];
+    
+    const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
+    
+    let shouldTerminate = false;
+
+    for (const weight of weights) {
+      if (shouldTerminate || score >= this.threshold) {
+        break;
+      }
+
+      const patterns = this.patternsByWeight[weight];
+      for (const {pattern, weight: patternWeight} of patterns) {
+        if (pattern.test(content)) {
+          score += patternWeight;
+          detectedPatterns.push(pattern.toString());
+          this.metrics.matchCount++;
+          
+          if (score >= this.threshold) {
+            shouldTerminate = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      isSuspicious: score >= this.threshold,
+      detectedPatterns
+    };
+  }
+
   handleSuspiciousContent(detectedPatterns) {
+    if (this.isUrlWhitelisted) {
+      console.log('URL is whitelisted, allowing content despite suspicious patterns');
+      return;
+    }
+
     this.blocked = true;
     const elementsRemoved = this.removeSuspiciousElements();
     const scriptsDisabled = this.disableInlineScripts();
@@ -205,6 +340,7 @@ class HTMLSmugglingBlocker {
 
     if (elementsRemoved > 0 || scriptsDisabled > 0 || 
         svgScriptsNeutralized > 0 || embedElementsRemoved > 0) {
+      this.blocked = true;
       this.logWarning(
         elementsRemoved, 
         scriptsDisabled, 
@@ -229,6 +365,10 @@ class HTMLSmugglingBlocker {
   }
 
   removeSuspiciousElements() {
+    if (this.isUrlWhitelisted) {
+      console.log('Skipping element removal - URL is whitelisted');
+      return 0;
+    }
     const suspiciousElements = document.querySelectorAll(
       'a[download][href^="data:"], a[download][href^="blob:"]'
     );
@@ -237,6 +377,10 @@ class HTMLSmugglingBlocker {
   }
 
   disableInlineScripts() {
+    if (this.isUrlWhitelisted) {
+      console.log('Skipping script removal - URL is whitelisted');
+      return 0;
+    }
     const inlineScripts = document.querySelectorAll('script:not([src])');
     console.log(`HTML Smuggling Blocker: Analyzing ${inlineScripts.length} inline scripts`);
     return this.removeElements(inlineScripts, (script) => this.isSuspiciousScript(script.textContent));
@@ -247,12 +391,20 @@ class HTMLSmugglingBlocker {
   }
 
   neutralizeSVGScripts() {
+    if (this.isUrlWhitelisted) {
+      console.log('Skipping SVG script removal - URL is whitelisted');
+      return 0;
+    }
     const svgScripts = document.querySelectorAll('svg script');
     console.log(`HTML Smuggling Blocker: Neutralized ${svgScripts.length} SVG scripts`);
     return this.removeElements(svgScripts);
   }
 
   removeEmbedElements() {
+    if (this.isUrlWhitelisted) {
+      console.log('Skipping embed element removal - URL is whitelisted');
+      return 0;
+    }
     const embedElements = document.querySelectorAll('embed');
     console.log(`HTML Smuggling Blocker: Removed ${embedElements.length} embed elements`);
     return this.removeElements(embedElements);
@@ -269,6 +421,10 @@ class HTMLSmugglingBlocker {
   }
 
   removeElements(elements, condition = () => true) {
+    if (this.isUrlWhitelisted) {
+      console.log('Skipping element removal - URL is whitelisted');
+      return 0;
+    }
     let count = 0;
     elements.forEach(el => {
       if (condition(el)) {
@@ -287,7 +443,7 @@ class HTMLSmugglingBlocker {
 
   allowContent() {
     document.documentElement.style.display = '';
-    console.log("HTML Smuggling Blocker: Content allowed");
+    console.log("Content allowed - whitelist active");
   }
 
   handleSuspiciousHeaders() {
@@ -303,6 +459,25 @@ class HTMLSmugglingBlocker {
         timestamp: new Date().toISOString()
       });
     }
+  }
+
+  verifyMLSystem() {
+    const testContent = `
+      <script>
+        const blob = new Blob(['suspicious content'], {type: 'application/octet-stream'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'test.bin';
+        a.click();
+      </script>
+    `;
+    
+    const result = mlDetector.detect(testContent);
+    console.log('ML Test Result:', result);
+    console.log('ML Performance:', mlDetector.monitor.getPerformanceReport());
+
+    return result;
   }
 }
 
