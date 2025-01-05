@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmuggleShield - HTML Smuggling Protection</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" href="../SmuggleShield/icon/SmuggleShield.png">
+</head>
+<body>
+    <div class="theme-toggle" id="themeToggle">
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <span>Switch Theme</span>
+    </div>
+
+    <header>
+        <nav>
+            <div class="logo-container">
+                <img src="../SmuggleShield/icon/SmuggleShield.png" alt="SmuggleShield Logo" class="logo">
+                <h1>SmuggleShield</h1>
+            </div>
+            <ul>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#installation">Installation</a></li>
+                <li><a href="#documentation">Documentation</a></li>
+                <li><a href="https://github.com/RootUp/SmuggleShield" target="_blank">GitHub</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Protect Against HTML Smuggling Attacks</h1>
+                <p>Advanced browser protection powered by machine learning</p>
+                <div class="cta-buttons">
+                    <a href="https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce" class="cta-button primary" target="_blank">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 6L9 17l-5-5"/>
+                        </svg>
+                        Install Extension
+                    </a>
+                    <a href="https://github.com/RootUp/SmuggleShield" class="cta-button secondary" target="_blank">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        View Source
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <h2>Key Features</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    <h3>ML-Powered Detection</h3>
+                    <p>Advanced machine learning algorithms to detect and prevent HTML smuggling attempts in real-time.</p>
+                </div>
+                <div class="feature-card">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                    <h3>Performance Monitoring</h3>
+                    <p>Detailed metrics and insights about detected threats and system performance.</p>
+                </div>
+                <div class="feature-card">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <h3>Whitelist System</h3>
+                    <p>Flexible whitelist management to reduce false positives and customize protection.</p>
+                </div>
+                <div class="feature-card">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    </svg>
+                    <h3>Detailed Logging</h3>
+                    <p>Comprehensive logging system for threat analysis and security auditing.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="workflow" class="workflow">
+            <h2>How It Works</h2>
+            <div class="workflow-container">
+                <div class="workflow-diagram">
+                    <img src="images/SmuggleShield-Workflow-Dark.svg" alt="Workflow Diagram" class="dark">
+                    <img src="images/SmuggleShield-Workflow-Light.svg" alt="Workflow Diagram" class="light">
+                </div>
+                
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                            </svg>
+                        </div>
+                        <div class="step-content">
+                            <h3>Content Analysis</h3>
+                            <p>Scans webpage content in real-time using pattern matching and ML detection.</p>
+                            <div class="code-snippet">
+                                <pre><code>// Pattern detection example
+const patterns = [
+  /atob\s*\([^)]+\).*new\s+uint8array/is,
+  /blob\s*\(\s*\[[^\]]+\]\s*,\s*\{type:/i
+];</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="workflow-step">
+                        <div class="step-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                            </svg>
+                        </div>
+                        <div class="step-content">
+                            <h3>ML Processing</h3>
+                            <p>Uses machine learning to analyze content and detect potential threats.</p>
+                            <div class="code-snippet">
+                                <pre><code>// ML feature extraction
+const features = {
+  base64Length: content.match(/base64,([^"']*)/g)?.length || 0,
+  blobUsage: content.match(/new\s+Blob/g)?.length || 0
+};</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="workflow-step">
+                        <div class="step-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                        <div class="step-content">
+                            <h3>Protection</h3>
+                            <p>Blocks suspicious content and prevents HTML smuggling attacks.</p>
+                            <div class="code-snippet">
+                                <pre><code>// Protection mechanism
+if (isSuspicious) {
+  blockContent();
+  logThreat({
+    url: document.location.href,
+    type: 'html_smuggling',
+    timestamp: Date.now()
+  });
+}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="installation" class="installation">
+            <h2>Installation Guide</h2>
+            <div class="installation-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>Download Extension</h3>
+                    <p>Install SmuggleShield from the Chrome Web Store or load it manually in developer mode.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>Configure Settings</h3>
+                    <p>Customize whitelist and protection settings according to your needs.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>Start Protection</h3>
+                    <p>Begin browsing with advanced protection against HTML smuggling attacks.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="documentation" class="documentation">
+            <h2>Documentation</h2>
+            <div class="doc-grid">
+                <a href="https://github.com/RootUp/SmuggleShield#readme" class="doc-card" target="_blank">
+                    <h3>Getting Started</h3>
+                    <p>Learn the basics of SmuggleShield and how to get started.</p>
+                </a>
+                <a href="https://github.com/RootUp/SmuggleShield/wiki" class="doc-card" target="_blank">
+                    <h3>Wiki</h3>
+                    <p>Detailed documentation and guides for advanced usage.</p>
+                </a>
+                <a href="https://github.com/RootUp/SmuggleShield/issues" class="doc-card" target="_blank">
+                    <h3>Support</h3>
+                    <p>Get help and report issues on GitHub.</p>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-info">
+                <img src="../SmuggleShield/icon/SmuggleShield.png" alt="SmuggleShield Logo" class="footer-logo">
+                <p>© 2025 SmuggleShield by <a href="https://x.com/RandomDhiraj" target="_blank">@RandomDhiraj</a></p>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/RootUp/SmuggleShield/blob/main/LICENSE">License</a>
+                <a href="https://github.com/RootUp/SmuggleShield/blob/main/CODE_OF_CONDUCT.md">Code of Conduct</a>
+                <a href="https://github.com/RootUp/SmuggleShield/blob/main/SECURITY.md">Security</a>
+                <a href="https://www.inputzero.io/p/smuggelsheild.html">Privacy Policy</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html> 
