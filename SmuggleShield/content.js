@@ -80,7 +80,6 @@ class HTMLSmugglingBlocker {
     this.feedbackDelay = 2000;
     this.isUrlWhitelisted = false;
     this.checkInitialWhitelist();
-    this.waitForBody();
   }
 
   async checkInitialWhitelist() {
@@ -157,6 +156,7 @@ class HTMLSmugglingBlocker {
   }
 
   setupListeners() {
+    
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === "setWhitelisted") {
         console.log('Received whitelist status:', request.value);
@@ -171,8 +171,7 @@ class HTMLSmugglingBlocker {
       } else if (request.action === "getBlockedStatus") {
         sendResponse({blocked: this.blocked});
       } else if (request.action === "suspiciousHeadersDetected") {
-        this.showNotification(request.message || '🛡️ SmuggleShield: Suspicious headers detected');
-        this.analyzeContent();
+        this.handleSuspiciousHeaders();
       } else if (request.action === "getMLMetrics") {
         const mlReport = mlDetector.monitor.getPerformanceReport();
         sendResponse({
@@ -342,9 +341,6 @@ class HTMLSmugglingBlocker {
     if (elementsRemoved > 0 || scriptsDisabled > 0 || 
         svgScriptsNeutralized > 0 || embedElementsRemoved > 0) {
       this.blocked = true;
-      
-      this.showNotification('🛡️ SmuggleShield: Suspicious content blocked');
-      
       this.logWarning(
         elementsRemoved, 
         scriptsDisabled, 
@@ -482,103 +478,6 @@ class HTMLSmugglingBlocker {
     console.log('ML Performance:', mlDetector.monitor.getPerformanceReport());
 
     return result;
-  }
-
-  waitForBody() {
-    if (document.body) {
-      this.setupNotification();
-    } else {
-      const observer = new MutationObserver(() => {
-        if (document.body) {
-          this.setupNotification();
-          observer.disconnect();
-        }
-      });
-      
-      observer.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-      });
-    }
-  }
-
-  setupNotification() {
-    if (!document.getElementById('smuggleshield-notification')) {
-      const notification = document.createElement('div');
-      notification.id = 'smuggleshield-notification';
-      notification.style.cssText = `
-        position: fixed;
-        top: 16px;
-        right: 16px;
-        background: #1a1a1a;
-        color: #ffffff;
-        padding: 10px 12px;
-        border-radius: 6px;
-        z-index: 2147483647;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 12px;
-        font-weight: 500;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        transform: translateY(-100%);
-        opacity: 0;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        pointer-events: none;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        max-width: 300px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-      `;
-
-      const icon = document.createElement('img');
-      icon.src = chrome.runtime.getURL('icon/SmuggleShield.png');
-      icon.style.cssText = `
-        width: 16px;
-        height: 16px;
-        object-fit: contain;
-      `;
-
-      const messageContainer = document.createElement('div');
-      messageContainer.style.cssText = `
-        flex-grow: 1;
-        line-height: 1.3;
-      `;
-
-      notification.appendChild(icon);
-      notification.appendChild(messageContainer);
-      
-      if (document.body) {
-        document.body.appendChild(notification);
-      }
-
-      notification.messageContainer = messageContainer;
-    }
-  }
-
-  showNotification(message, duration = 3000) {
-    if (!document.getElementById('smuggleshield-notification')) {
-      this.setupNotification();
-    }
-    
-    const notification = document.getElementById('smuggleshield-notification');
-    if (notification) {
-      notification.messageContainer.textContent = message.replace('🛡️', '').trim();
-      
-      notification.style.transition = 'none';
-      notification.style.transform = 'translateY(-100%)';
-      notification.style.opacity = '0';
-      
-      notification.offsetHeight;
-      
-      notification.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
-      notification.style.transform = 'translateY(0)';
-      notification.style.opacity = '1';
-
-      setTimeout(() => {
-        notification.style.transform = 'translateY(-100%)';
-        notification.style.opacity = '0';
-      }, duration);
-    }
   }
 }
 
