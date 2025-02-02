@@ -1,140 +1,128 @@
-class MLMonitor {
+class MLDetector {
   constructor() {
-    this.metrics = {
-      totalDetections: 0,
-      truePositives: 0,
-      falsePositives: 0,
-      modelAccuracy: 0,
-      confidenceScores: [],
-      featureImportance: new Map([
-        ['base64Length', { totalImpact: 0, occurrences: 0 }],
-        ['blobUsage', { totalImpact: 0, occurrences: 0 }],
-        ['downloadAttr', { totalImpact: 0, occurrences: 0 }],
-        ['scriptDensity', { totalImpact: 0, occurrences: 0 }],
-        ['encodingFunctions', { totalImpact: 0, occurrences: 0 }],
-        ['binaryManipulation', { totalImpact: 0, occurrences: 0 }]
-      ]),
-      learningProgress: []
+    this.monitor = new MLMonitor();
+    this.features = {
+      patterns: new Map(),
+      contextual: new Map(),
+      weights: new Map()
     };
     
-    this.metrics.learningProgress.push({
-      timestamp: Date.now(),
-      accuracy: 0,
-      featuresLearned: 0,
-      threshold: 0.75
-    });
+    this.threshold = 0.75;
+    this.learningRate = 0.1;
+    this.minSamples = 5;
     
-    this.loadMetrics();
+    this.loadModel();
   }
 
-  async loadMetrics() {
+  async loadModel() {
     try {
       const data = await new Promise(resolve => {
-        chrome.storage.local.get(['mlMetrics'], result => resolve(result.mlMetrics));
+        chrome.storage.local.get(['mlModel'], result => resolve(result.mlModel));
       });
-      if (data?.mlMetrics) {
-        this.metrics = {...this.metrics, ...data.mlMetrics};
+      
+      if (data?.mlModel) {
+        this.features = this.deserializeModel(data.mlModel);
       }
     } catch (error) {
-      console.error('Error loading ML metrics:', error);
+      console.error('Error loading ML model:', error);
     }
   }
 
-  async saveMetrics() {
+  async saveModel() {
     try {
       await chrome.storage.local.set({
-        mlMetrics: this.metrics
+        mlModel: this.serializeModel()
       });
     } catch (error) {
-      console.error('Error saving ML metrics:', error);
+      console.error('Error saving ML model:', error);
     }
   }
 
-  recordPrediction(prediction, features) {
-    this.metrics.totalDetections++;
-    this.metrics.confidenceScores.push(prediction.confidence);
+  serializeModel() {
+    return {
+      patterns: Array.from(this.features.patterns.entries()),
+      contextual: Array.from(this.features.contextual.entries()),
+      weights: Array.from(this.features.weights.entries())
+    };
+  }
+
+  deserializeModel(data) {
+    return {
+      patterns: new Map(data.patterns),
+      contextual: new Map(data.contextual),
+      weights: new Map(data.weights)
+    };
+  }
+
+  extractFeatures(content) {
+    const features = new Map();
     
-    for (const [feature, value] of Object.entries(features)) {
-      const current = this.metrics.featureImportance.get(feature) || {
-        totalImpact: 0,
-        occurrences: 0
-      };
-      current.totalImpact += value * prediction.confidence;
-      current.occurrences++;
-      this.metrics.featureImportance.set(feature, current);
-    }
-
-    if (this.metrics.confidenceScores.length > 1000) {
-      this.metrics.confidenceScores.shift();
-    }
-
-    this.saveMetrics();
+    features.set('base64Length', (content.match(/[A-Za-z0-9+/=]{100,}/g) || []).length);
+    features.set('blobUsage', (content.match(/new\s+blob/gi) || []).length);
+    features.set('downloadAttr', (content.match(/download=["'][^"']*["']/gi) || []).length);
+    
+    features.set('scriptDensity', content.split('script').length / content.length);
+    features.set('encodingFunctions', (content.match(/atob|btoa|encode|decode/gi) || []).length);
+    features.set('binaryManipulation', (content.match(/ArrayBuffer|Uint8Array|DataView/gi) || []).length);
+    
+    return features;
   }
 
-  recordValidation(wasCorrect) {
-    if (wasCorrect) {
-      this.metrics.truePositives++;
-    } else {
-      this.metrics.falsePositives++;
+  calculateScore(features) {
+    let score = 0;
+    let totalWeight = 0;
+    
+    for (const [feature, value] of features) {
+      const weight = this.features.weights.get(feature) || 1;
+      const threshold = this.features.patterns.get(feature) || 0;
+      
+      if (value > threshold) {
+        score += weight;
+      }
+      totalWeight += weight;
     }
     
-    this.updateAccuracy();
-    this.saveMetrics();
+    return totalWeight > 0 ? score / totalWeight : 0;
   }
 
-  updateAccuracy() {
-    const total = this.metrics.truePositives + this.metrics.falsePositives;
-    this.metrics.modelAccuracy = total > 0 ? 
-      this.metrics.truePositives / total : 0;
-  }
+  async learn(content, isSmuggling) {
+    const features = this.extractFeatures(content);
+    
+    for (const [feature, value] of features) {
 
-  recordLearningProgress(modelState) {
-    this.metrics.learningProgress.push({
-      timestamp: Date.now(),
-      accuracy: this.metrics.modelAccuracy,
-      featuresLearned: modelState.features.patterns.size,
-      threshold: modelState.threshold
+      const currentThreshold = this.features.patterns.get(feature) || 0;
+      const samples = this.features.contextual.get(feature) || 0;
+      
+      const newThreshold = (currentThreshold * samples + value) / (samples + 1);
+      this.features.patterns.set(feature, newThreshold);
+      this.features.contextual.set(feature, samples + 1);
+      
+      if (samples >= this.minSamples) {
+        const currentWeight = this.features.weights.get(feature) || 1;
+        const correlation = isSmuggling ? 1 : -1;
+        const newWeight = Math.max(0.1, currentWeight + (this.learningRate * correlation));
+        this.features.weights.set(feature, newWeight);
+      }
+    }
+    
+    this.monitor.recordValidation(isSmuggling);
+    this.monitor.recordLearningProgress({
+      features: this.features,
+      threshold: this.threshold
     });
-
-    if (this.metrics.learningProgress.length > 100) {
-      this.metrics.learningProgress.shift();
-    }
-
-    this.saveMetrics();
+    
+    await this.saveModel();
   }
 
-  getPerformanceReport() {
-    return {
-      accuracy: this.metrics.modelAccuracy,
-      totalDetections: this.metrics.totalDetections,
-      averageConfidence: this.getAverageConfidence(),
-      topFeatures: this.getTopFeatures(5),
-      learningProgress: this.metrics.learningProgress,
-      recentPerformance: this.getRecentPerformance()
+  detect(content) {
+    const features = this.extractFeatures(content);
+    const score = this.calculateScore(features);
+    const prediction = {
+      isSmuggling: score >= this.threshold,
+      confidence: score,
+      features: Object.fromEntries(features)
     };
-  }
-
-  getAverageConfidence() {
-    return this.metrics.confidenceScores.length > 0 ?
-      this.metrics.confidenceScores.reduce((a, b) => a + b, 0) / 
-      this.metrics.confidenceScores.length : 0;
-  }
-
-  getTopFeatures(n) {
-    return Array.from(this.metrics.featureImportance.entries())
-      .map(([feature, {totalImpact, occurrences}]) => ({
-        feature,
-        importance: totalImpact / occurrences
-      }))
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, n);
-  }
-
-  getRecentPerformance() {
-    const recent = this.metrics.learningProgress.slice(-10);
-    return {
-      accuracyTrend: recent.map(p => p.accuracy),
-      featureGrowth: recent.map(p => p.featuresLearned)
-    };
+    this.monitor.recordPrediction(prediction, Object.fromEntries(features));
+    return prediction;
   }
 } 
