@@ -113,6 +113,7 @@
     if (force || elapsed >= 3000) {
       removeBanner();
     } else {
+      // Otherwise, schedule the hide
       if (hideTimeout) clearTimeout(hideTimeout);
       hideTimeout = setTimeout(() => {
         removeBanner();
