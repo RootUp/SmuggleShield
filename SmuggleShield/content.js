@@ -104,7 +104,6 @@ class HTMLSmugglingBlocker {
     this.blocked = false;
     
     if (enabled) {
-      // Override all blocking methods
       this.analyzeContent = () => {
         console.log('Skipping analysis - URL is whitelisted');
         return;
@@ -348,6 +347,9 @@ class HTMLSmugglingBlocker {
         embedElementsRemoved, 
         detectedPatterns
       );
+      if (window.SmuggleShieldBanner?.show) {
+        window.SmuggleShieldBanner.show();
+      }
     }
   }
 
@@ -444,6 +446,9 @@ class HTMLSmugglingBlocker {
   allowContent() {
     document.documentElement.style.display = '';
     console.log("Content allowed - whitelist active");
+    if (window.SmuggleShieldBanner?.hide) {
+      window.SmuggleShieldBanner.hide();
+    }
   }
 
   handleSuspiciousHeaders() {
