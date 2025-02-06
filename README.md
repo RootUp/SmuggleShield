@@ -31,10 +31,11 @@ SmuggleShield can protect against HTML smuggling attempts in incognito mode, but
 
 | **Sr. No.** | **Details**                                | **Reference**                                                                                                                 |
 |-------------|--------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| 1           | Quakbot campaign (14th July 2022)          | [GitHub](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)                                    |
-| 2           | DCRat malware via HTML Smuggling           | [X (Twitter)](https://x.com/RandomDhiraj/status/1839717748970021027)                                                       |
-| 3           | Pikabot (TA577, Version 1.1.15-ghost)      | [GitHub](https://github.com/pr0xylife/Pikabot/blob/main/Pikabot_01.11.2023.txt)                                            |
-| 4           | AsyncRAT delivered via malspam campaign    | [X (Twitter)](https://x.com/RandomDhiraj/status/1854182495337476211)                                                       |
+| 1           | Shuckworm                                  | [X (Twitter)](https://x.com/RandomDhiraj/status/1887387347387371528)                                                       |
+| 2           | Quakbot campaign (14th July 2022)          | [GitHub](https://github.com/0xToxin/Malware-IOCs/blob/main/Quakbot/Quakbot-%2014072022)                                    |
+| 3           | DCRat malware via HTML Smuggling           | [X (Twitter)](https://x.com/RandomDhiraj/status/1839717748970021027)                                                       |
+| 4           | Pikabot (TA577, Version 1.1.15-ghost)      | [GitHub](https://github.com/pr0xylife/Pikabot/blob/main/Pikabot_01.11.2023.txt)                                            |
+| 5           | AsyncRAT delivered via malspam campaign    | [X (Twitter)](https://x.com/RandomDhiraj/status/1854182495337476211)                                                       |
 
 ## Special Thanks
 I have taken multiple code references from StackOverflow/Github and file smuggling samples from delivr[dot]to. Hence, special thanks to them!
