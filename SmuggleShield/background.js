@@ -2,7 +2,8 @@ const config = {
   suspiciousURLPatterns: [
     /data:application\/octet-stream/i,
     /blob:/i,
-    /javascript:/i
+    /javascript:/i,
+    /data:application\/x-rar-compressed/i
   ],
   suspiciousHeaders: ['content-disposition', 'content-type'],
   logRetentionDays: 10,
