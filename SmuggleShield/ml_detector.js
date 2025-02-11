@@ -12,6 +12,12 @@ class MLDetector {
     this.minSamples = 5;
     
     this.loadModel();
+    
+    this.lastDetectionTime = 0;
+    this.detectionThrottleMs = 1000; 
+    
+    this.featureCache = new Map();
+    this.maxCacheSize = 1000;
   }
 
   async loadModel() {
@@ -55,17 +61,57 @@ class MLDetector {
   }
 
   extractFeatures(content) {
+    const cacheKey = this.hashContent(content);
+    if (this.featureCache.has(cacheKey)) {
+      return this.featureCache.get(cacheKey);
+    }
+
     const features = new Map();
     
-    features.set('base64Length', (content.match(/[A-Za-z0-9+/=]{100,}/g) || []).length);
-    features.set('blobUsage', (content.match(/new\s+blob/gi) || []).length);
-    features.set('downloadAttr', (content.match(/download=["'][^"']*["']/gi) || []).length);
+    const combinedPattern = /(?:[A-Za-z0-9+/=]{100,})|(?:new\s+blob)|(?:download=["'][^"']*["'])|(?:script)|(?:atob|btoa|encode|decode)|(?:ArrayBuffer|Uint8Array|DataView)/gi;
     
-    features.set('scriptDensity', content.split('script').length / content.length);
-    features.set('encodingFunctions', (content.match(/atob|btoa|encode|decode/gi) || []).length);
-    features.set('binaryManipulation', (content.match(/ArrayBuffer|Uint8Array|DataView/gi) || []).length);
+    const matches = content.match(combinedPattern) || [];
+    const counts = new Map();
+    
+    matches.forEach(match => {
+      const type = this.categorizeMatch(match);
+      counts.set(type, (counts.get(type) || 0) + 1);
+    });
+    
+    features.set('base64Length', counts.get('base64') || 0);
+    features.set('blobUsage', counts.get('blob') || 0);
+    features.set('downloadAttr', counts.get('download') || 0);
+    features.set('scriptDensity', (counts.get('script') || 0) / content.length);
+    features.set('encodingFunctions', counts.get('encoding') || 0);
+    features.set('binaryManipulation', counts.get('binary') || 0);
+    
+    if (this.featureCache.size >= this.maxCacheSize) {
+      const firstKey = this.featureCache.keys().next().value;
+      this.featureCache.delete(firstKey);
+    }
+    this.featureCache.set(cacheKey, features);
     
     return features;
+  }
+
+  categorizeMatch(match) {
+    if (match.length >= 100 && /^[A-Za-z0-9+/=]+$/.test(match)) return 'base64';
+    if (/new\s+blob/i.test(match)) return 'blob';
+    if (/download=["'][^"']*["']/i.test(match)) return 'download';
+    if (/script/i.test(match)) return 'script';
+    if (/atob|btoa|encode|decode/i.test(match)) return 'encoding';
+    if (/ArrayBuffer|Uint8Array|DataView/i.test(match)) return 'binary';
+    return 'other';
+  }
+
+  hashContent(content) {
+    let hash = 0;
+    const len = Math.min(content.length, 1000);
+    for (let i = 0; i < len; i++) {
+      hash = ((hash << 5) - hash) + content.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return hash;
   }
 
   calculateScore(features) {
@@ -115,6 +161,12 @@ class MLDetector {
   }
 
   detect(content) {
+    const now = Date.now();
+    if (now - this.lastDetectionTime < this.detectionThrottleMs) {
+      return null;
+    }
+    this.lastDetectionTime = now;
+
     const features = this.extractFeatures(content);
     const score = this.calculateScore(features);
     const prediction = {
@@ -122,7 +174,11 @@ class MLDetector {
       confidence: score,
       features: Object.fromEntries(features)
     };
-    this.monitor.recordPrediction(prediction, Object.fromEntries(features));
+    
+    if (score > 0.3) { 
+      this.monitor.recordPrediction(prediction, Object.fromEntries(features));
+    }
+    
     return prediction;
   }
 } 

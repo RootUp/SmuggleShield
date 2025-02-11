@@ -25,6 +25,8 @@ class MLMonitor {
     });
     
     this.loadMetrics();
+    
+    this.debouncedSave = this.debounce(this.saveMetrics.bind(this), 5000);
   }
 
   async loadMetrics() {
@@ -51,24 +53,34 @@ class MLMonitor {
   }
 
   recordPrediction(prediction, features) {
-    this.metrics.totalDetections++;
-    this.metrics.confidenceScores.push(prediction.confidence);
-    
-    for (const [feature, value] of Object.entries(features)) {
-      const current = this.metrics.featureImportance.get(feature) || {
-        totalImpact: 0,
-        occurrences: 0
-      };
-      current.totalImpact += value * prediction.confidence;
-      current.occurrences++;
-      this.metrics.featureImportance.set(feature, current);
-    }
+    if (Math.abs(prediction.confidence - this.getAverageConfidence()) > 0.1) {
+      this.metrics.totalDetections++;
+      this.metrics.confidenceScores.push(prediction.confidence);
+      
+      const updates = new Map();
+      for (const [feature, value] of Object.entries(features)) {
+        if (value > 0.1) {
+          const current = this.metrics.featureImportance.get(feature) || {
+            totalImpact: 0,
+            occurrences: 0
+          };
+          updates.set(feature, {
+            totalImpact: current.totalImpact + (value * prediction.confidence),
+            occurrences: current.occurrences + 1
+          });
+        }
+      }
+      
+      updates.forEach((value, key) => {
+        this.metrics.featureImportance.set(key, value);
+      });
 
-    if (this.metrics.confidenceScores.length > 1000) {
-      this.metrics.confidenceScores.shift();
-    }
+      if (this.metrics.confidenceScores.length > 1000) {
+        this.metrics.confidenceScores = this.metrics.confidenceScores.slice(-1000);
+      }
 
-    this.saveMetrics();
+      this.debouncedSave();
+    }
   }
 
   recordValidation(wasCorrect) {
@@ -89,18 +101,25 @@ class MLMonitor {
   }
 
   recordLearningProgress(modelState) {
-    this.metrics.learningProgress.push({
-      timestamp: Date.now(),
-      accuracy: this.metrics.modelAccuracy,
-      featuresLearned: modelState.features.patterns.size,
-      threshold: modelState.threshold
-    });
+    const lastProgress = this.metrics.learningProgress[this.metrics.learningProgress.length - 1];
+    
+    if (!lastProgress || 
+        Math.abs(this.metrics.modelAccuracy - lastProgress.accuracy) > 0.05 ||
+        Math.abs(modelState.features.patterns.size - lastProgress.featuresLearned) > 5) {
+        
+        this.metrics.learningProgress.push({
+            timestamp: Date.now(),
+            accuracy: this.metrics.modelAccuracy,
+            featuresLearned: modelState.features.patterns.size,
+            threshold: modelState.threshold
+        });
 
-    if (this.metrics.learningProgress.length > 100) {
-      this.metrics.learningProgress.shift();
+        if (this.metrics.learningProgress.length > 100) {
+            this.metrics.learningProgress = this.metrics.learningProgress.slice(-100);
+        }
+
+        this.debouncedSave();
     }
-
-    this.saveMetrics();
   }
 
   getPerformanceReport() {
@@ -135,6 +154,18 @@ class MLMonitor {
     return {
       accuracyTrend: recent.map(p => p.accuracy),
       featureGrowth: recent.map(p => p.featuresLearned)
+    };
+  }
+
+  debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
     };
   }
 } 
