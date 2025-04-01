@@ -80,6 +80,12 @@ class HTMLSmugglingBlocker {
       { pattern: /\['style'\]\['visi' \+ 'bility'\]/i, weight: 3 },
       { pattern: /function\s+\w+Chunks\s*\([^)]*\)\s*\{[^{}]*for\s*\([^{}]*\)\s*\{[^{}]*substr/i, weight: 3 },
       { pattern: /\.substr\s*\(\s*\w+\s*,\s*\w+Size\s*\)/i, weight: 2 },
+      { pattern: /\(async\s*\(\s*\)\s*=>\s*\{\s*(?:let|var|const)\s+d\s*=.*?(?:document\.getElementById|document\.querySelector).*?dataset.*?\.href\s*=\s*d.*?\.download\s*=.*?\.click\s*\(\s*\)/is, weight: 4 },
+      { pattern: /\bdocument\.getElementById\s*\(\s*['"]data['"]\s*\).*?\.dataset\.file.*?createElement\s*\(\s*['"]a['"]\s*\).*?\.download\s*=/is, weight: 4 },
+      { pattern: /<div[^>]*id\s*=\s*["']data["'][^>]*data-file\s*=\s*["'][A-Za-z0-9+\/=]{50,}["'][^>]*>/is, weight: 3 },
+      { pattern: /<script>\s*\(\s*async\s*\(\s*\)\s*=>\s*\{[^}]*createElement\s*\(\s*['"]a['"]\s*\)[^}]*\.click\s*\(\s*\)[^}]*\.remove\s*\(\s*\)/is, weight: 4 },
+      { pattern: /\b(?:atob|decodeURIComponent)\s*\([^)]*(?:dataset|getAttribute)\s*\.[^)]*\)[^;]*\.href\s*=[^;]*\.download\s*=[^;]*\.click\s*\(\s*\)/is, weight: 4 },
+      { pattern: /\bdocument\.body\.appendChild\s*\([^)]+\)[^;]*\.click\s*\(\s*\)[^;]*\.remove\s*\(\s*\)/is, weight: 4 },
     ];
     this.threshold = 4;
     this.cache = new Map();
