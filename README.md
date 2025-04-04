@@ -2,7 +2,10 @@
 ***Stable Version (2.0)***
 
 [![CodeQL Advanced](https://github.com/RootUp/SmuggleShield/actions/workflows/codeql.yml/badge.svg)](https://github.com/RootUp/SmuggleShield/actions/workflows/codeql.yml) <br>
-[![Install SmuggleShield](https://img.shields.io/badge/Chrome-Install_SmuggleShield-green?logo=google-chrome&logoColor=white)](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce)
+[![Install SmuggleShield](https://img.shields.io/badge/Chrome-Install_SmuggleShield-green?logo=google-chrome&logoColor=white)](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce) <br>
+<a href="https://www.blackhat.com/asia-25/arsenal/schedule/#smuggleshield----basic-protection-against-html-smuggling-43154">
+  <img src="https://github.com/user-attachments/assets/316fa3e3-a840-43ba-811f-61caa1f79fd8" alt="SmuggleShield BlackHat" width="80" height="30">
+</a>
 
 SmuggleShield is a browser extension that aims to prevent **basic** HTML smuggling attacks by detecting common patterns. While this is not a comprehensive or bulletproof solution, it is an attempt to provide an additional layer of security during browsing or during your red/puprle team exercise.
 
