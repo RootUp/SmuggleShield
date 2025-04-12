@@ -118,7 +118,7 @@ class MLDetector {
     
     patternCounts.download = (limitedContent.match(/download\s*=\s*["'][^"']*["']/gi) || []).length;
     
-    patternCounts.script = (limitedContent.match(/<script[^>]*>[^<]*<\/script>/gi) || []).length;
+    patternCounts.script = (limitedContent.match(/<script[^>]*>[\s\S]*?<\/script\s*>/gi) || []).length;
     
     patternCounts.encoding = (limitedContent.match(/atob|btoa|encode|decode/gi) || []).length;
     
@@ -215,6 +215,7 @@ class MLDetector {
       features: this.features,
       threshold: this.threshold
     });
+    
     
     this.learningCount++;
     if (this.learningCount >= 10 || Date.now() - this.lastModelSave >= this.saveThrottleMs) {
