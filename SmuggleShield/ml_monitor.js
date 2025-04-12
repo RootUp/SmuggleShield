@@ -12,7 +12,10 @@ class MLMonitor {
         ['downloadAttr', { totalImpact: 0, occurrences: 0 }],
         ['scriptDensity', { totalImpact: 0, occurrences: 0 }],
         ['encodingFunctions', { totalImpact: 0, occurrences: 0 }],
-        ['binaryManipulation', { totalImpact: 0, occurrences: 0 }]
+        ['binaryManipulation', { totalImpact: 0, occurrences: 0 }],
+        ['hasDataUri', { totalImpact: 0, occurrences: 0 }],
+        ['hasBlobUri', { totalImpact: 0, occurrences: 0 }],
+        ['hasFileCreation', { totalImpact: 0, occurrences: 0 }]
       ]),
       learningProgress: []
     };
