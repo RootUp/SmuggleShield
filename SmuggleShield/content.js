@@ -226,15 +226,156 @@ class HTMLSmugglingBlocker {
 
   setupObserver() {
     const observer = new MutationObserver((mutations) => {
-      if (mutations.some(mutation => mutation.addedNodes.length > 0)) {
-        this.analyzeContent();
+      if (this.isUrlWhitelisted) {
+        return;
+      }
+      
+      let shouldAnalyze = false;
+      const nodesToAnalyze = [];
+      
+      for (const mutation of mutations) {
+        if (mutation.addedNodes.length > 0) {
+          for (const node of mutation.addedNodes) {
+            if (node instanceof HTMLElement) {
+              nodesToAnalyze.push(node);
+              shouldAnalyze = true;
+            }
+          }
+        }
+        
+        if (mutation.type === 'attributes' && 
+            ['src', 'href', 'download', 'data-*'].some(attr => 
+              mutation.attributeName === attr || 
+              mutation.attributeName?.startsWith('data-'))) {
+          if (mutation.target instanceof HTMLElement) {
+            nodesToAnalyze.push(mutation.target);
+            shouldAnalyze = true;
+          }
+        }
+      }
+      
+      if (shouldAnalyze) {
+        this.analyzeNodes(nodesToAnalyze);
       }
     });
 
     observer.observe(document.documentElement, {
       childList: true,
-      subtree: true
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'href', 'download', 'data-*']
     });
+    
+    if (!this.isUrlWhitelisted) {
+      this.analyzeContent();
+    }
+  }
+  
+  analyzeNodes(nodes) {
+    if (this.isUrlWhitelisted || nodes.length === 0) {
+      return;
+    }
+    
+    for (const node of nodes) {
+      if (node.textContent && node.textContent.length < 50) {
+        continue;
+      }
+      
+      const htmlContent = node.outerHTML;
+      
+      const cacheKey = this.getCacheKey(htmlContent);
+      const cachedResult = this.cache.get(cacheKey);
+      
+      if (cachedResult) {
+        this.metrics.cacheHits++;
+        if (cachedResult.score >= this.threshold) {
+          this.handleSuspiciousNode(node, cachedResult.detectedPatterns);
+        }
+        continue;
+      }
+      
+      this.metrics.cacheMisses++;
+      
+      const patternResult = this.analyzeWithPatterns(htmlContent);
+      let mlResult = null;
+      
+      if (htmlContent.length > 1000 || patternResult.score > 1) {
+        mlResult = this.mlEnabled ? mlDetector.detect(htmlContent) : null;
+      }
+      
+      const isSuspicious = patternResult.isSuspicious || (mlResult?.isSmuggling || false);
+      
+      if (isSuspicious) {
+        this.handleSuspiciousNode(node, patternResult.detectedPatterns);
+        
+        setTimeout(() => {
+          if (this.blocked) {
+            mlDetector.learn(htmlContent, true);
+          }
+        }, this.feedbackDelay);
+      } else {
+        
+        if (htmlContent.length > 1000) {
+          mlDetector.learn(htmlContent, false);
+        }
+      }
+    }
+  }
+  
+  handleSuspiciousNode(node, detectedPatterns) {
+    if (this.isUrlWhitelisted) {
+      return;
+    }
+    
+    if (node.tagName === 'SCRIPT' && !node.src) {
+      
+      if (this.isSuspiciousScript(node.textContent)) {
+        this.removeElement(node);
+        this.blocked = true;
+      }
+    } else if (node.tagName === 'A' && node.hasAttribute('download') && 
+              (node.href.startsWith('data:') || node.href.startsWith('blob:'))) {
+      
+      this.removeElement(node);
+      this.blocked = true;
+    } else if (node.tagName === 'EMBED') {
+      
+      this.removeElement(node);
+      this.blocked = true;
+    } else if (node.tagName === 'SVG' && node.querySelector('script')) {
+      
+      const scripts = node.querySelectorAll('script');
+      scripts.forEach(script => this.removeElement(script));
+      this.blocked = true;
+    } else {
+      
+      const suspiciousElements = node.querySelectorAll(
+        'a[download][href^="data:"], a[download][href^="blob:"], embed, svg script'
+      );
+      if (suspiciousElements.length > 0) {
+        suspiciousElements.forEach(el => this.removeElement(el));
+        this.blocked = true;
+      }
+      
+      
+      const inlineScripts = node.querySelectorAll('script:not([src])');
+      inlineScripts.forEach(script => {
+        if (this.isSuspiciousScript(script.textContent)) {
+          this.removeElement(script);
+          this.blocked = true;
+        }
+      });
+    }
+    
+    if (this.blocked) {
+      this.logWarning(
+        1,
+        0,
+        0,
+        0,
+        detectedPatterns
+      );
+    }
   }
 
   async analyzeContent() {
@@ -325,25 +466,60 @@ class HTMLSmugglingBlocker {
     let score = 0;
     const detectedPatterns = [];
     
-    const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
+    if (content.length < 50) {
+      return {
+        isSuspicious: false,
+        detectedPatterns: [],
+        score: 0
+      };
+    }
     
-    let shouldTerminate = false;
-
-    for (const weight of weights) {
-      if (shouldTerminate || score >= this.threshold) {
-        break;
+    const quickCheck = /blob|atob|download|base64|arraybuffer|uint8array|createobjecturl|fromcharcode/i;
+    if (!quickCheck.test(content)) {
+      return {
+        isSuspicious: false,
+        detectedPatterns: [],
+        score: 0
+      };
+    }
+    
+    const highWeightPatterns = Object.keys(this.patternsByWeight)
+      .filter(weight => parseInt(weight) >= 3)
+      .flatMap(weight => this.patternsByWeight[weight]);
+      
+    for (const {pattern, weight} of highWeightPatterns) {
+      if (pattern.test(content)) {
+        score += weight;
+        detectedPatterns.push(pattern.toString());
+        this.metrics.matchCount++;
+        
+        if (score >= this.threshold) {
+          return {
+            isSuspicious: true,
+            detectedPatterns,
+            score
+          };
+        }
       }
-
-      const patterns = this.patternsByWeight[weight];
-      for (const {pattern, weight: patternWeight} of patterns) {
+    }
+    
+    if (score >= this.threshold - 2) {
+      const lowWeightPatterns = Object.keys(this.patternsByWeight)
+        .filter(weight => parseInt(weight) < 3)
+        .flatMap(weight => this.patternsByWeight[weight]);
+        
+      for (const {pattern, weight} of lowWeightPatterns) {
         if (pattern.test(content)) {
-          score += patternWeight;
+          score += weight;
           detectedPatterns.push(pattern.toString());
           this.metrics.matchCount++;
           
           if (score >= this.threshold) {
-            shouldTerminate = true;
-            break;
+            return {
+              isSuspicious: true,
+              detectedPatterns,
+              score
+            };
           }
         }
       }
@@ -351,7 +527,8 @@ class HTMLSmugglingBlocker {
 
     return {
       isSuspicious: score >= this.threshold,
-      detectedPatterns
+      detectedPatterns,
+      score
     };
   }
 
