@@ -216,8 +216,6 @@ class MLDetector {
       threshold: this.threshold
     });
     
-    // Only save the model after a significant number of learning examples
-    // or if enough time has passed since the last save
     this.learningCount++;
     if (this.learningCount >= 10 || Date.now() - this.lastModelSave >= this.saveThrottleMs) {
       await this.saveModel();
