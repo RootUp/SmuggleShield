@@ -118,7 +118,7 @@ class MLDetector {
     
     patternCounts.download = (limitedContent.match(/download\s*=\s*["'][^"']*["']/gi) || []).length;
     
-    patternCounts.script = (limitedContent.match(/<script[^>]*>[\s\S]*?<\/script\s*>/gi) || []).length;
+    patternCounts.script = (limitedContent.match(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi) || []).length;
     
     patternCounts.encoding = (limitedContent.match(/atob|btoa|encode|decode/gi) || []).length;
     
