@@ -18,6 +18,11 @@ class MLDetector {
     
     this.featureCache = new Map();
     this.maxCacheSize = 1000;
+    
+    this.lastModelSave = Date.now();
+    this.saveThrottleMs = 30000; // 30 seconds
+    this.pendingSave = false;
+    this.learningCount = 0;
   }
 
   async loadModel() {
@@ -36,11 +41,34 @@ class MLDetector {
 
   async saveModel() {
     try {
+      const now = Date.now();
+      if (now - this.lastModelSave < this.saveThrottleMs) {
+        // If we're saving too frequently, schedule a save for later
+        if (!this.pendingSave) {
+          this.pendingSave = true;
+          setTimeout(() => {
+            this.actualSaveModel();
+            this.pendingSave = false;
+          }, this.saveThrottleMs - (now - this.lastModelSave));
+        }
+        return;
+      }
+      
+      await this.actualSaveModel();
+    } catch (error) {
+      console.error('Error saving ML model:', error);
+    }
+  }
+  
+  async actualSaveModel() {
+    try {
       await chrome.storage.local.set({
         mlModel: this.serializeModel()
       });
+      this.lastModelSave = Date.now();
+      this.learningCount = 0;
     } catch (error) {
-      console.error('Error saving ML model:', error);
+      console.error('Error in actualSaveModel:', error);
     }
   }
 
@@ -68,22 +96,48 @@ class MLDetector {
 
     const features = new Map();
     
-    const combinedPattern = /(?:[A-Za-z0-9+/=]{100,})|(?:new\s+blob)|(?:download=["'][^"']*["'])|(?:script)|(?:atob|btoa|encode|decode)|(?:ArrayBuffer|Uint8Array|DataView)/gi;
+    const limitedContent = content.length > 50000 ? 
+      content.substring(0, 25000) + content.substring(content.length - 25000) : 
+      content;
     
-    const matches = content.match(combinedPattern) || [];
-    const counts = new Map();
     
-    matches.forEach(match => {
-      const type = this.categorizeMatch(match);
-      counts.set(type, (counts.get(type) || 0) + 1);
-    });
+    const patternCounts = {
+      base64: 0,
+      blob: 0,
+      download: 0,
+      script: 0, 
+      encoding: 0,
+      binary: 0
+    };
     
-    features.set('base64Length', counts.get('base64') || 0);
-    features.set('blobUsage', counts.get('blob') || 0);
-    features.set('downloadAttr', counts.get('download') || 0);
-    features.set('scriptDensity', (counts.get('script') || 0) / content.length);
-    features.set('encodingFunctions', counts.get('encoding') || 0);
-    features.set('binaryManipulation', counts.get('binary') || 0);
+    
+    const base64Matches = limitedContent.match(/[A-Za-z0-9+/=]{100,}/g) || [];
+    patternCounts.base64 = base64Matches.length;
+    
+    patternCounts.blob = (limitedContent.match(/new\s+blob/gi) || []).length;
+    
+    patternCounts.download = (limitedContent.match(/download\s*=\s*["'][^"']*["']/gi) || []).length;
+    
+    patternCounts.script = (limitedContent.match(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi) || []).length;
+    
+    patternCounts.encoding = (limitedContent.match(/atob|btoa|encode|decode/gi) || []).length;
+    
+    patternCounts.binary = (limitedContent.match(/ArrayBuffer|Uint8Array|DataView/gi) || []).length;
+    
+    features.set('base64Length', patternCounts.base64);
+    features.set('blobUsage', patternCounts.blob);
+    features.set('downloadAttr', patternCounts.download);
+    features.set('scriptDensity', patternCounts.script / (limitedContent.length / 1000));
+    features.set('encodingFunctions', patternCounts.encoding);
+    features.set('binaryManipulation', patternCounts.binary);
+    
+    const hasDataUri = /data:application\/[^;]+;base64,/i.test(limitedContent);
+    const hasBlobUri = /blob:[^"']+/i.test(limitedContent);
+    const hasFileCreation = /\.click\(\s*\)[^}]*(?:revoke|remove)/i.test(limitedContent);
+    
+    features.set('hasDataUri', hasDataUri ? 1 : 0);
+    features.set('hasBlobUri', hasBlobUri ? 1 : 0);
+    features.set('hasFileCreation', hasFileCreation ? 1 : 0);
     
     if (this.featureCache.size >= this.maxCacheSize) {
       const firstKey = this.featureCache.keys().next().value;
@@ -106,12 +160,17 @@ class MLDetector {
 
   hashContent(content) {
     let hash = 0;
-    const len = Math.min(content.length, 1000);
-    for (let i = 0; i < len; i++) {
-      hash = ((hash << 5) - hash) + content.charCodeAt(i);
+    const start = content.substring(0, 1000);
+    const end = content.length > 2000 ? 
+      content.substring(content.length - 1000) : 
+      '';
+    const toHash = start + end;
+    
+    for (let i = 0; i < toHash.length; i++) {
+      hash = ((hash << 5) - hash) + toHash.charCodeAt(i);
       hash = hash & hash;
     }
-    return hash;
+    return hash + '_' + content.length;
   }
 
   calculateScore(features) {
@@ -157,7 +216,11 @@ class MLDetector {
       threshold: this.threshold
     });
     
-    await this.saveModel();
+    
+    this.learningCount++;
+    if (this.learningCount >= 10 || Date.now() - this.lastModelSave >= this.saveThrottleMs) {
+      await this.saveModel();
+    }
   }
 
   detect(content) {

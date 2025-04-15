@@ -5,6 +5,10 @@ class DashboardManager {
         this.loadInitialData();
         this.initializeTheme();
         this.ensureWhitelistFunctionality();
+        
+        this.errorCount = 0;
+        this.maxErrorRetries = 3;
+        this.retryDelay = 2000; // ms
     }
 
     initializeComponents() {
@@ -93,9 +97,19 @@ class DashboardManager {
             const whitelist = result.whitelist || [];
             this.renderUrlList(whitelist);
             console.log('Current whitelist:', whitelist);
+            return whitelist;
         } catch (error) {
             this.showNotification('Error loading whitelist', 'error');
             console.error('Error loading whitelist:', error);
+            
+            if (this.errorCount < this.maxErrorRetries) {
+                this.errorCount++;
+                console.log(`Retrying whitelist load (${this.errorCount}/${this.maxErrorRetries})...`);
+                setTimeout(() => this.loadWhitelist(), this.retryDelay);
+            } else {
+                this.showNotification('Failed to load whitelist after multiple attempts', 'error');
+            }
+            return [];
         }
     }
 
@@ -203,19 +217,29 @@ class DashboardManager {
             const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
             
             if (!tab) {
-                this.mlMetricsDiv.innerHTML = '<p>Error: No active tab</p>';
+                this.mlMetricsDiv.innerHTML = '<p>No active tab found - metrics only available for active tabs.</p>';
                 return;
             }
 
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                action: "getMLMetrics"
-            });
-            
-            if (response?.metrics) {
-                const metrics = response.metrics;
-                this.renderMLMetrics(metrics);
-            } else {
-                this.mlMetricsDiv.innerHTML = '<p>No metrics data available</p>';
+            if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+                this.mlMetricsDiv.innerHTML = '<p>Metrics not available on this page type.</p>';
+                return;
+            }
+
+            try {
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: "getMLMetrics"
+                });
+                
+                if (response?.metrics) {
+                    const metrics = response.metrics;
+                    this.renderMLMetrics(metrics);
+                } else {
+                    this.mlMetricsDiv.innerHTML = '<p>No metrics data available for the current page.</p>';
+                }
+            } catch (error) {
+                console.error('Error sending message to tab:', error);
+                this.mlMetricsDiv.innerHTML = '<p>Could not communicate with the SmuggleShield content script on this page.</p>';
             }
         } catch (error) {
             console.error('Error updating ML metrics:', error);
@@ -300,18 +324,46 @@ class DashboardManager {
         this.notification.className = `notification ${type}`;
         this.notification.classList.add('show');
         
+        // Log errors for debugging
+        if (type === 'error') {
+            console.error(`Notification error: ${message}`);
+        }
+        
         setTimeout(() => {
             this.notification.classList.remove('show');
         }, 3000);
     }
 
     async ensureWhitelistFunctionality() {
-        const result = await chrome.storage.local.get('whitelist');
-        if (!result.whitelist) {
-            await chrome.storage.local.set({ whitelist: [] });
+        try {
+            const result = await chrome.storage.local.get('whitelist');
+            if (!result.whitelist) {
+                await chrome.storage.local.set({ whitelist: [] });
+                console.log('Initialized empty whitelist');
+            }
+            
+            await this.loadWhitelist();
+        } catch (error) {
+            console.error('Error ensuring whitelist functionality:', error);
+            this.showNotification('Error initializing whitelist', 'error');
+            
+            setTimeout(() => {
+                this.recoveryInitialization();
+            }, 3000);
         }
-        
-        await this.loadWhitelist();
+    }
+    
+    async recoveryInitialization() {
+        try {
+            console.log('Attempting recovery initialization...');
+            // Force reset of whitelist
+            await chrome.storage.local.set({ whitelist: [] });
+            await this.loadWhitelist();
+            this.showNotification('Whitelist has been reset due to initialization error', 'warning');
+        } catch (error) {
+            console.error('Recovery initialization failed:', error);
+            this.showNotification('Critical error with whitelist functionality', 'error');
+        }
     }
 }
 
