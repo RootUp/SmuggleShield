@@ -1,5 +1,5 @@
 # SmuggleShield
-***Stable Version (2.0)***
+***Stable Version (2.1)***
 
 [![CodeQL Advanced](https://github.com/RootUp/SmuggleShield/actions/workflows/codeql.yml/badge.svg)](https://github.com/RootUp/SmuggleShield/actions/workflows/codeql.yml) <br>
 [![Install SmuggleShield](https://img.shields.io/badge/Chrome-Install_SmuggleShield-green?logo=google-chrome&logoColor=white)](https://chromewebstore.google.com/detail/SmuggleShield/lglilndcogcapdkpfllcdlopgffbepce) <br>
