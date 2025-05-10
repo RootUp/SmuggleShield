@@ -174,6 +174,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       updateConfig(request.newConfig);
       sendResponse({success: true});
       return true;
+    case "whitelistUpdated":
+      chrome.storage.local.get('whitelist').then(result => {
+        const whitelist = result.whitelist || [];
+        console.log('Whitelist updated (via merged listener):', whitelist);
+      });
+      return true;
   }
 });
 
@@ -209,44 +215,9 @@ const memoizedAnalyzeURL = memoize((url) => {
   return {isSuspicious, timestamp: Date.now()};
 }, (url) => url);
 
-function setupObserver() {
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      mutation.addedNodes.forEach(node => {
-        if (node instanceof HTMLElement) {
-          contentAnalyzer.queueForAnalysis(node);
-        }
-      });
-
-      if (mutation.type === 'attributes' && mutation.target instanceof HTMLElement) {
-        contentAnalyzer.queueForAnalysis(mutation.target);
-      }
-    }
-  });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['src', 'href', 'data']
-  });
-
-  contentAnalyzer.queueForAnalysis(document.documentElement);
-}
-
 chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.create({
     url: chrome.runtime.getURL('main.html'),
     active: true
   });
-});
-
-
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  if (request.action === "whitelistUpdated") {
-    const result = await chrome.storage.local.get('whitelist');
-    const whitelist = result.whitelist || [];
-    console.log('Whitelist updated:', whitelist);
-    return true;
-  }
 });
