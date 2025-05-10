@@ -148,16 +148,6 @@ class MLDetector {
     return features;
   }
 
-  categorizeMatch(match) {
-    if (match.length >= 100 && /^[A-Za-z0-9+/=]+$/.test(match)) return 'base64';
-    if (/new\s+blob/i.test(match)) return 'blob';
-    if (/download=["'][^"']*["']/i.test(match)) return 'download';
-    if (/script/i.test(match)) return 'script';
-    if (/atob|btoa|encode|decode/i.test(match)) return 'encoding';
-    if (/ArrayBuffer|Uint8Array|DataView/i.test(match)) return 'binary';
-    return 'other';
-  }
-
   hashContent(content) {
     let hash = 0;
     const start = content.substring(0, 1000);
