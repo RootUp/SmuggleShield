@@ -94,15 +94,54 @@ async function isWhitelisted(url) {
   }
 }
 
+async function notifyWhitelistChange() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    console.log(`Notifying ${tabs.length} tabs about whitelist changes`);
+    
+    for (const tab of tabs) {
+      try {
+        if (tab.url && tab.url.startsWith('http')) {
+          const isWhitelistedUrl = await isWhitelisted(tab.url);
+          await chrome.tabs.sendMessage(tab.id, { 
+            action: "setWhitelisted",
+            value: isWhitelistedUrl
+          }).catch(error => console.debug(`Tab not ready for message: ${tab.id}`, error));
+          
+          if (isWhitelistedUrl) {
+            await chrome.tabs.reload(tab.id);
+          }
+        }
+      } catch (error) {
+        console.debug('Error updating tab:', error);
+      }
+    }
+  } catch (error) {
+    console.error('Error notifying tabs about whitelist changes:', error);
+  }
+}
+
 chrome.webNavigation.onCommitted.addListener(async (details) => {
   if (details.frameId === 0) { // Main frame only
     const isWhitelistedUrl = await isWhitelisted(details.url);
+    console.log('Navigation detected, sending whitelist status:', details.url, isWhitelistedUrl);
     if (isWhitelistedUrl) {
       chrome.tabs.sendMessage(details.tabId, {
         action: "setWhitelisted",
         value: true
       }).catch(error => console.debug('Tab not ready yet:', error));
     }
+  }
+});
+
+chrome.webNavigation.onCompleted.addListener(async (details) => {
+  if (details.frameId === 0) { // Main frame only
+    const isWhitelistedUrl = await isWhitelisted(details.url);
+    console.log('Navigation completed, confirming whitelist status:', details.url, isWhitelistedUrl);
+    chrome.tabs.sendMessage(details.tabId, {
+      action: "setWhitelisted",
+      value: isWhitelistedUrl
+    }).catch(error => console.debug('Tab not ready yet on completed:', error));
   }
 });
 
@@ -175,6 +214,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({success: true});
       return true;
     case "whitelistUpdated":
+      console.log('Whitelist updated message received, notifying tabs');
+      notifyWhitelistChange();
       chrome.storage.local.get('whitelist').then(result => {
         const whitelist = result.whitelist || [];
         console.log('Whitelist updated (via merged listener):', whitelist);
