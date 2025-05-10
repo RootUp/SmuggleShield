@@ -270,6 +270,16 @@ class DashboardManager {
                 </ul>
             </div>
         `;
+
+        const topFeaturesUl = this.mlMetricsDiv.querySelector('.metric-card:last-child ul');
+        if (topFeaturesUl) {
+            topFeaturesUl.innerHTML = ''; // Clear existing LIs if we are re-rendering
+            metrics.topFeatures.forEach(f => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${f.feature}: ${(f.importance * 100).toFixed(2)}%`;
+                topFeaturesUl.appendChild(listItem);
+            });
+        }
     }
 
     async handleExport() {
