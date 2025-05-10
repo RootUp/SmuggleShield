@@ -16,7 +16,7 @@ class HTMLSmugglingBlocker {
       { pattern: /url\.revokeobjecturl\s*\(\s*url\s*\)/i, weight: 2 },
       { pattern: /window\s*\[\s*(?:["']\w+["']\s*\+\s*)+["']\w+["']\s*\]/i, weight: 3 },
       { pattern: /document\s*\[\s*(?:["']\w+["']\s*\+\s*)+["']\w+["']\s*\]\s*\(\s*window\s*\[\s*(?:['"]at['"].*['"]o['"].*['"]b['"]\s*\]|\s*(?:["']\w+["']\s*\+\s*)+["']\w+["']\s*\])\s*\(['"][A-Za-z0-9+/=]+['"]\)\s*\)/i, weight: 4 },
-      { pattern: /var\s+\w+=\w+;?\s*\(function\(\w+,\w+\)\{.*while\(!!\[\]\)\{try\{.*parseint.*\}catch\(\w+\)\{.*\}\}\}\(.*\)\);?/is, weight: 4 },
+      { pattern: /var\s+\w+=\w+;?\s*\(function\(\w+,\w+\)\{.*while\(!!\[\]\)\{try\{.*parseint.*\}catch\(\w+\)\{.*\}\}\(.*\)\);?/is, weight: 4 },
       { pattern: /blob\s*\(\s*\[[^\]]+\]\s*,\s*\{\s*type\s*:\s*['"](?:application\/octet-stream|text\/html|octet\/stream)['"](?:\s*,\s*encoding\s*:\s*['"]base64['"])?\s*\}\s*\)/is, weight: 3 },
       { pattern: /\.style\s*=\s*['"]display:\s*none['"].*\.href\s*=.*\.download\s*=/is, weight: 3 },
       { pattern: /\.click\s*\(\s*\).*url\.revokeobjecturl/is, weight: 3 },
@@ -334,7 +334,7 @@ class HTMLSmugglingBlocker {
         mlConfidence: mlResult?.confidence || 0
     });
     
-    if (this.cache.size > 1000) { 
+    if (this.cache.size > 1000) { // Cache eviction
         const firstKey = this.cache.keys().next().value;
         this.cache.delete(firstKey);
     }
@@ -527,29 +527,6 @@ class HTMLSmugglingBlocker {
     };
   }
 
-  handleSuspiciousContent(detectedPatterns) {
-    console.warn("handleSuspiciousContent is deprecated; blocking is handled by handleSuspiciousNode.");
-
-    this.blocked = true;
-
-    const elementsRemoved = this.removeSuspiciousElements();
-    const scriptsDisabled = this.disableInlineScripts();
-    const svgScriptsNeutralized = this.neutralizeSVGScripts();
-    const embedElementsRemoved = this.removeEmbedElements();
-
-    if (elementsRemoved > 0 || scriptsDisabled > 0 || 
-        svgScriptsNeutralized > 0 || embedElementsRemoved > 0) {
-      this.blocked = true;
-      this.logWarning(
-        elementsRemoved, 
-        scriptsDisabled, 
-        svgScriptsNeutralized, 
-        embedElementsRemoved, 
-        detectedPatterns
-      );
-    }
-  }
-
   logPerformanceMetrics() {
     const avgAnalysisTime = this.metrics.analysisTime.reduce((a, b) => a + b, 0) / 
                            this.metrics.analysisTime.length;
@@ -561,52 +538,6 @@ class HTMLSmugglingBlocker {
       patternsChecked: this.metrics.matchCount,
       earlyTerminations: this.metrics.earlyTerminations || 0
     });
-  }
-
-  removeSuspiciousElements() {
-    if (this.isUrlWhitelisted) {
-      console.log('Skipping element removal - URL is whitelisted');
-      return 0;
-    }
-    const suspiciousElements = document.querySelectorAll(
-      'a[download][href^="data:"], a[download][href^="blob:"]'
-    );
-    console.log(`HTML Smuggling Blocker: Removed ${suspiciousElements.length} suspicious elements`);
-    return this.removeElements(suspiciousElements);
-  }
-
-  disableInlineScripts() {
-    if (this.isUrlWhitelisted) {
-      console.log('Skipping script removal - URL is whitelisted');
-      return 0;
-    }
-    const inlineScripts = document.querySelectorAll('script:not([src])');
-    console.log(`HTML Smuggling Blocker: Analyzing ${inlineScripts.length} inline scripts`);
-    return this.removeElements(inlineScripts, (script) => this.isSuspiciousScript(script.textContent));
-  }
-
-  isSuspiciousScript(scriptContent) {
-    return this.suspiciousPatterns.some(({pattern}) => pattern.test(scriptContent));
-  }
-
-  neutralizeSVGScripts() {
-    if (this.isUrlWhitelisted) {
-      console.log('Skipping SVG script removal - URL is whitelisted');
-      return 0;
-    }
-    const svgScripts = document.querySelectorAll('svg script');
-    console.log(`HTML Smuggling Blocker: Neutralized ${svgScripts.length} SVG scripts`);
-    return this.removeElements(svgScripts);
-  }
-
-  removeEmbedElements() {
-    if (this.isUrlWhitelisted) {
-      console.log('Skipping embed element removal - URL is whitelisted');
-      return 0;
-    }
-    const embedElements = document.querySelectorAll('embed');
-    console.log(`HTML Smuggling Blocker: Removed ${embedElements.length} embed elements`);
-    return this.removeElements(embedElements);
   }
 
   logWarning(elementsRemoved, scriptsDisabled, svgScriptsNeutralized, embedElementsRemoved, detectedPatterns) {
@@ -650,6 +581,10 @@ class HTMLSmugglingBlocker {
     if (!this.isUrlWhitelisted) {
         this.performInitialTargetedScan();
     }
+  }
+
+  isSuspiciousScript(scriptContent) {
+    return this.suspiciousPatterns.some(({pattern}) => pattern.test(scriptContent));
   }
 }
 
