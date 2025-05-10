@@ -105,18 +105,38 @@ class HTMLSmugglingBlocker {
     }));
 
     this.patternsByWeight = this.groupPatternsByWeight();
-    this.setupListeners();
-
+    
     this.mlEnabled = true;
     this.feedbackDelay = 2000;
     this.isUrlWhitelisted = false;
-    this.checkInitialWhitelist();
-
+    
+    this.checkInitialWhitelistSync();
+    this.setupListeners();
+    
     setTimeout(() => {
-      if (!this.isUrlWhitelisted) {
+      this.checkInitialWhitelist().then(() => {
+        if (!this.isUrlWhitelisted) {
           this.performInitialTargetedScan();
+        }
+      });
+    }, 50);
+  }
+
+  checkInitialWhitelistSync() {
+    try {
+      const hostname = window.location.hostname;
+      const whitelistStr = localStorage.getItem('smuggleshield_whitelist');
+      if (whitelistStr) {
+        const whitelist = JSON.parse(whitelistStr);
+        this.isUrlWhitelisted = Array.isArray(whitelist) && whitelist.includes(hostname);
+        console.log('Sync whitelist check:', hostname, 'Is whitelisted:', this.isUrlWhitelisted);
+        if (this.isUrlWhitelisted) {
+          this.setWhitelistMode(true);
+        }
       }
-    }, 100);
+    } catch (error) {
+      console.error('Error in sync whitelist check:', error);
+    }
   }
 
   async checkInitialWhitelist() {
@@ -125,14 +145,26 @@ class HTMLSmugglingBlocker {
       const result = await chrome.storage.local.get('whitelist');
       const whitelist = result.whitelist || [];
       console.log('Checking whitelist for:', hostname, 'Whitelist:', whitelist);
+      
+      try {
+        localStorage.setItem('smuggleshield_whitelist', JSON.stringify(whitelist));
+      } catch (e) {
+        console.warn('Could not save whitelist to localStorage:', e);
+      }
+      
+      const wasWhitelisted = this.isUrlWhitelisted;
       this.isUrlWhitelisted = whitelist.includes(hostname);
       console.log('Is URL whitelisted?', this.isUrlWhitelisted);
-      if (this.isUrlWhitelisted) {
-        this.setWhitelistMode(true);
+      
+      if (this.isUrlWhitelisted !== wasWhitelisted) {
+        this.setWhitelistMode(this.isUrlWhitelisted);
       }
+      
+      return this.isUrlWhitelisted;
     } catch (error) {
       console.error('Error checking whitelist:', error);
       this.isUrlWhitelisted = false;
+      return false;
     }
   }
 
@@ -141,6 +173,13 @@ class HTMLSmugglingBlocker {
     this.blocked = false;
     
     if (enabled) {
+      console.log('Setting whitelist mode: ENABLED');
+      
+      // Disconnect the mutation observer to stop all analysis
+      if (this.disconnectObserver) {
+        this.disconnectObserver();
+      }
+      
       // Override all blocking methods
       this.analyzeContent = () => {
         console.log('Skipping analysis - URL is whitelisted');
@@ -156,12 +195,19 @@ class HTMLSmugglingBlocker {
       this.removeEmbedElements = () => 0;
       this.removeElement = () => {};
       
-      
+      // Allow content if whitelisted
       this.allowContent();
       
+      // Re-enable any disabled scripts
       document.querySelectorAll('script').forEach(script => {
         script.removeAttribute('type');
       });
+    } else {
+      console.log('Setting whitelist mode: DISABLED');
+      // If observer was disconnected, set it up again
+      if (!this.observer && this.setupObserver) {
+        this.setupObserver();
+      }
     }
   }
 
@@ -257,7 +303,7 @@ class HTMLSmugglingBlocker {
         }
       }
       
-      if (shouldAnalyze) {
+      if (shouldAnalyze && !this.isUrlWhitelisted) {
         this.analyzeNodes(nodesToAnalyze);
       }
     });
@@ -268,6 +314,16 @@ class HTMLSmugglingBlocker {
       attributes: true,
       attributeFilter: ['src', 'href', 'download', 'data-*']
     });
+    
+    this.observer = observer;
+    
+    this.disconnectObserver = () => {
+      if (this.observer) {
+        console.log('Disconnecting mutation observer due to whitelist');
+        this.observer.disconnect();
+        this.observer = null;
+      }
+    };
   }
   
   async performInitialTargetedScan() {
@@ -334,7 +390,7 @@ class HTMLSmugglingBlocker {
         mlConfidence: mlResult?.confidence || 0
     });
     
-    if (this.cache.size > 1000) { // Cache eviction
+    if (this.cache.size > 1000) {
         const firstKey = this.cache.keys().next().value;
         this.cache.delete(firstKey);
     }
