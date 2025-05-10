@@ -13,13 +13,13 @@ The extension is compatible both on Chrome and Edge for Mac and Windows OS. Enab
 
 ## Extension Workflow
 
-![SmuggleShield-Workflow](https://github.com/user-attachments/assets/a42d9f8d-3968-42c8-b0e8-a9507defa197)
+![SmuggleShiled](https://github.com/user-attachments/assets/4048bebe-0004-457d-9242-17379eabe73b)
 
 ## Machine Learning Integration & Workflow
 
 First, the `HTMLSmugglingBlocker` analyzes webpage content and combines both pattern-based detection and ML-based analysis. The MLDetector then extracts six key features (`base64Length`, `blobUsage`, `downloadAttr`, `scriptDensity`, `encodingFunctions`, `binaryManipulation`) and makes predictions using a **0.75** confidence threshold. Then its a continuous learning loop where the `MLMonitor` tracks performance metrics and feeds results back to improve detection accuracy, with all learned patterns persisted in `chrome.storage.local` for adaptation to new threats.
 
-![SmuggleShield-ML](https://github.com/user-attachments/assets/043b9f32-b28f-437f-a7c6-1f59e705dc22)
+![SmuggleShiled-ML](https://github.com/user-attachments/assets/03539fef-331b-4b93-8b26-98310f4a820c)
 
 https://github.com/user-attachments/assets/8b8f1333-6a99-4979-bc17-56026a048ba8
 
