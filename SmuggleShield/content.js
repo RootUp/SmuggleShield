@@ -95,6 +95,8 @@ class HTMLSmugglingBlocker {
       cacheHits: 0,
       cacheMisses: 0
     };
+    this.lastBlockedNode = null;
+    this.analysisCounter = 0;
 
     this.suspiciousPatterns = this.suspiciousPatterns.map(({pattern, weight}) => ({
       pattern: new RegExp(pattern, 'is'),
@@ -109,6 +111,12 @@ class HTMLSmugglingBlocker {
     this.feedbackDelay = 2000;
     this.isUrlWhitelisted = false;
     this.checkInitialWhitelist();
+
+    setTimeout(() => {
+      if (!this.isUrlWhitelisted) {
+          this.performInitialTargetedScan();
+      }
+    }, 100);
   }
 
   async checkInitialWhitelist() {
@@ -196,7 +204,7 @@ class HTMLSmugglingBlocker {
       if (request.action === "whitelistUpdated") {
         this.checkInitialWhitelist();
       } else if (request.action === "analyzeContent") {
-        this.analyzeContent();
+        console.warn("analyzeContent message received, but primary analysis is now observer-driven.");
       } else if (request.action === "getBlockedStatus") {
         sendResponse({blocked: this.blocked});
       } else if (request.action === "suspiciousHeadersDetected") {
@@ -217,11 +225,6 @@ class HTMLSmugglingBlocker {
     });
 
     this.setupObserver();
-    
-    
-    if (!this.isUrlWhitelisted) {
-      this.analyzeContent();
-    }
   }
 
   setupObserver() {
@@ -265,59 +268,126 @@ class HTMLSmugglingBlocker {
       attributes: true,
       attributeFilter: ['src', 'href', 'download', 'data-*']
     });
-    
-    if (!this.isUrlWhitelisted) {
-      this.analyzeContent();
-    }
   }
   
+  async performInitialTargetedScan() {
+    if (this.isUrlWhitelisted) {
+        console.log('URL is whitelisted, skipping initial targeted scan.');
+        return;
+    }
+    console.log("Performing initial targeted scan for patterns.");
+    const elementsToScan = document.querySelectorAll(
+        'script:not([src]), a[download][href^="data:"], a[download][href^="blob:"], embed, svg, iframe[srcdoc]'
+    );
+
+    for (const el of elementsToScan) {
+        
+        if (el && el.parentNode) { 
+            await this.analyzeSingleNode(el);
+        }
+    }
+    console.log("Initial targeted scan completed.");
+  }
+
+  async analyzeSingleNode(node) {
+    const nodeAnalysisStartTime = performance.now();
+    if (this.isUrlWhitelisted || !node || typeof node.hasAttribute !== 'function') {
+        return;
+    }
+
+    const htmlContent = node.outerHTML;
+    if (!htmlContent || htmlContent.length < 20) { 
+        return;
+    }
+
+    const cacheKey = this.getCacheKey(htmlContent);
+    if (this.cache.has(cacheKey)) {
+        this.metrics.cacheHits++;
+        const cached = this.cache.get(cacheKey);
+        const isSuspiciousByCachedPattern = cached.patternScore >= this.threshold;
+        const isSuspiciousByCachedML = this.mlEnabled && cached.mlIsSmuggling;
+
+        if (isSuspiciousByCachedPattern || isSuspiciousByCachedML) {
+            const patternsToReport = isSuspiciousByCachedPattern ? cached.detectedPatterns : (isSuspiciousByCachedML ? ["ML:HighConfidence(Cached)"] : []);
+            this.handleSuspiciousNode(node, patternsToReport);
+        }
+        this.updatePerformanceMetrics(nodeAnalysisStartTime);
+        return; 
+    }
+    this.metrics.cacheMisses++;
+
+    const patternResult = this.analyzeWithPatterns(htmlContent);
+    let mlResult = null;
+
+    if (this.mlEnabled && (htmlContent.length > 1000 || patternResult.score > 1)) {
+         mlResult = mlDetector.detect(htmlContent);
+    }
+
+    const isSuspiciousByPattern = patternResult.score >= this.threshold;
+    const isSuspiciousByML = this.mlEnabled && (mlResult?.isSmuggling || false);
+    const isSuspicious = isSuspiciousByPattern || isSuspiciousByML;
+
+    this.cache.set(cacheKey, {
+        patternScore: patternResult.score,
+        detectedPatterns: patternResult.detectedPatterns,
+        mlIsSmuggling: mlResult?.isSmuggling || false,
+        mlConfidence: mlResult?.confidence || 0
+    });
+    
+    if (this.cache.size > 1000) { 
+        const firstKey = this.cache.keys().next().value;
+        this.cache.delete(firstKey);
+    }
+
+    if (isSuspicious) {
+        const reportingPatterns = isSuspiciousByPattern ? patternResult.detectedPatterns : (isSuspiciousByML ? ["ML:HighConfidence"] : []);
+        this.handleSuspiciousNode(node, reportingPatterns);
+
+        setTimeout(() => {
+            
+            if (this.blocked && this.lastBlockedNode === node && node.parentNode) { 
+                mlDetector.learn(htmlContent, true);
+            } else if (mlResult && node.parentNode) { 
+
+                const actuallyBlockedByPatternsForThisNode = isSuspiciousByPattern && this.blocked && this.lastBlockedNode === node;
+                if(mlResult.isSmuggling && !actuallyBlockedByPatternsForThisNode) {
+                     mlDetector.learn(htmlContent, false); 
+                } else if (!mlResult.isSmuggling && !actuallyBlockedByPatternsForThisNode) {
+                     mlDetector.learn(htmlContent, false); 
+                }
+
+            }
+        }, this.feedbackDelay);
+
+    } else { 
+        if (this.mlEnabled && mlResult && node.parentNode) { 
+            mlDetector.learn(htmlContent, false);
+        } else if (this.mlEnabled && htmlContent.length > 1000 && !mlResult && node.parentNode) {
+             
+             mlDetector.learn(htmlContent, false);
+        }
+    }
+    this.updatePerformanceMetrics(nodeAnalysisStartTime);
+  }
+
+  updatePerformanceMetrics(startTime) {
+    const analysisTime = performance.now() - startTime;
+    this.metrics.analysisTime.push(analysisTime);
+    this.analysisCounter++;
+    if (this.analysisCounter % 100 === 0) {
+        this.logPerformanceMetrics();
+    }
+  }
+
   analyzeNodes(nodes) {
     if (this.isUrlWhitelisted || nodes.length === 0) {
       return;
     }
     
     for (const node of nodes) {
-      if (node.textContent && node.textContent.length < 50) {
-        continue;
-      }
       
-      const htmlContent = node.outerHTML;
-      
-      const cacheKey = this.getCacheKey(htmlContent);
-      const cachedResult = this.cache.get(cacheKey);
-      
-      if (cachedResult) {
-        this.metrics.cacheHits++;
-        if (cachedResult.score >= this.threshold) {
-          this.handleSuspiciousNode(node, cachedResult.detectedPatterns);
-        }
-        continue;
-      }
-      
-      this.metrics.cacheMisses++;
-      
-      const patternResult = this.analyzeWithPatterns(htmlContent);
-      let mlResult = null;
-      
-      if (htmlContent.length > 1000 || patternResult.score > 1) {
-        mlResult = this.mlEnabled ? mlDetector.detect(htmlContent) : null;
-      }
-      
-      const isSuspicious = patternResult.isSuspicious || (mlResult?.isSmuggling || false);
-      
-      if (isSuspicious) {
-        this.handleSuspiciousNode(node, patternResult.detectedPatterns);
-        
-        setTimeout(() => {
-          if (this.blocked) {
-            mlDetector.learn(htmlContent, true);
-          }
-        }, this.feedbackDelay);
-      } else {
-        
-        if (htmlContent.length > 1000) {
-          mlDetector.learn(htmlContent, false);
-        }
+      if (node instanceof HTMLElement && node.parentNode) {
+        this.analyzeSingleNode(node);
       }
     }
   }
@@ -368,6 +438,7 @@ class HTMLSmugglingBlocker {
     }
     
     if (this.blocked) {
+      this.lastBlockedNode = node;
       this.logWarning(
         1,
         0,
@@ -379,86 +450,10 @@ class HTMLSmugglingBlocker {
   }
 
   async analyzeContent() {
+    console.warn("analyzeContent is deprecated; analysis is now event-driven and targeted.");
     if (this.isUrlWhitelisted) {
       console.log('URL is whitelisted, skipping analysis');
       return;
-    }
-    
-    const startTime = performance.now();
-    const htmlContent = document.documentElement.outerHTML;
-    
-    const patternResult = this.analyzeWithPatterns(htmlContent);
-    
-    const mlResult = this.mlEnabled ? mlDetector.detect(htmlContent) : null;
-    
-    const isSuspicious = patternResult.isSuspicious || (mlResult?.isSmuggling || false);
-    
-    if (isSuspicious) {
-      this.handleSuspiciousContent(patternResult.detectedPatterns);
-      
-      setTimeout(() => {
-        if (this.blocked) {
-          mlDetector.learn(htmlContent, true);
-        }
-      }, this.feedbackDelay);
-    } else {
-      this.blocked = false;
-      this.allowContent();
-      
-      mlDetector.learn(htmlContent, false);
-    }
-    
-    const cacheKey = this.getCacheKey(htmlContent);
-    
-    const cachedResult = this.cache.get(cacheKey);
-    if (cachedResult) {
-      this.metrics.cacheHits++;
-      if (cachedResult.score >= this.threshold) {
-        this.handleSuspiciousContent(cachedResult.detectedPatterns);
-      }
-      return;
-    }
-    
-    this.metrics.cacheMisses++;
-    let score = 0;
-    const detectedPatterns = [];
-
-    const weights = Object.keys(this.patternsByWeight).sort((a, b) => b - a);
-    
-    let shouldTerminate = false;
-
-    for (const weight of weights) {
-      if (shouldTerminate || score >= this.threshold) {
-        break;
-      }
-
-      const patterns = this.patternsByWeight[weight];
-      for (const {pattern, weight: patternWeight} of patterns) {
-        if (pattern.test(htmlContent)) {
-          score += patternWeight;
-          detectedPatterns.push(pattern.toString());
-          this.metrics.matchCount++;
-          
-          if (score >= this.threshold) {
-            shouldTerminate = true;
-            break;
-          }
-        }
-      }
-    }
-
-    this.cache.set(cacheKey, { score, detectedPatterns });
-    
-    if (this.cache.size > 1000) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
-    }
-
-    const analysisTime = performance.now() - startTime;
-    this.metrics.analysisTime.push(analysisTime);
-
-    if (this.metrics.analysisTime.length % 100 === 0) {
-      this.logPerformanceMetrics();
     }
   }
 
@@ -533,12 +528,10 @@ class HTMLSmugglingBlocker {
   }
 
   handleSuspiciousContent(detectedPatterns) {
-    if (this.isUrlWhitelisted) {
-      console.log('URL is whitelisted, allowing content despite suspicious patterns');
-      return;
-    }
+    console.warn("handleSuspiciousContent is deprecated; blocking is handled by handleSuspiciousNode.");
 
     this.blocked = true;
+
     const elementsRemoved = this.removeSuspiciousElements();
     const scriptsDisabled = this.disableInlineScripts();
     const svgScriptsNeutralized = this.neutralizeSVGScripts();
@@ -653,37 +646,10 @@ class HTMLSmugglingBlocker {
   }
 
   handleSuspiciousHeaders() {
-    console.log("Suspicious headers detected");
-    this.analyzeContent();
-  }
-
-  debugPatternMatch(pattern, content, weight) {
-    if (this.debugMode) {
-      console.debug(`Pattern match [weight: ${weight}]:`, {
-        pattern: pattern.toString(),
-        contentPreview: content.substring(0, 100) + '...',
-        timestamp: new Date().toISOString()
-      });
+    console.log("Suspicious headers detected, triggering a targeted scan of current DOM state.");
+    if (!this.isUrlWhitelisted) {
+        this.performInitialTargetedScan();
     }
-  }
-
-  verifyMLSystem() {
-    const testContent = `
-      <script>
-        const blob = new Blob(['suspicious content'], {type: 'application/octet-stream'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'test.bin';
-        a.click();
-      </script>
-    `;
-    
-    const result = mlDetector.detect(testContent);
-    console.log('ML Test Result:', result);
-    console.log('ML Performance:', mlDetector.monitor.getPerformanceReport());
-
-    return result;
   }
 }
 
