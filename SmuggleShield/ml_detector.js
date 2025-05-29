@@ -112,7 +112,38 @@ class MLDetector {
       encodingCalls: 0,
       binaryConstructs: 0,
       jsKeywords: 0,
+      sensitiveKeywords: 0,
+      suspiciousAssignments: 0,
+      atobCalls: 0,
+      dynamicAtobArgs: 0,
+      nonAsciiChars: 0,
+      whitespaceChars: 0,
+      lineCount: 1, // Start with 1 to avoid division by zero for single-line content
+      maxDepth: 0,
     };
+    
+    // Iterate once for character-level metrics
+    let currentDepth = 0;
+    for (let i = 0; i < limitedContentLength; i++) {
+        const char = limitedContent[i];
+        if (char === '{' || char === '(' || char === '[') {
+            currentDepth++;
+            if (currentDepth > patternCounts.maxDepth) {
+                patternCounts.maxDepth = currentDepth;
+            }
+        } else if (char === '}' || char === ')' || char === ']') {
+            currentDepth--;
+        }
+        if (char === '\n') {
+            patternCounts.lineCount++;
+        }
+        if (char.charCodeAt(0) > 127) {
+            patternCounts.nonAsciiChars++;
+        }
+        if (/\s/.test(char)) {
+            patternCounts.whitespaceChars++;
+        }
+    }
     
     // 2. Regex & Feature Engineering: base64
     const base64Matches = limitedContent.match(/[A-Za-z0-9+/=]{100,}/g) || [];
@@ -163,8 +194,39 @@ class MLDetector {
     }
     features.set('encodingCallCount', patternCounts.encodingCalls);
     features.set('binaryConstructCount', patternCounts.binaryConstructs);
+
+    // New Contextual Features
+    const sensitiveKeywordsRegex = /eval\(|document\.write\(|innerHTML\s*=|setAttribute\s*\(|createElement\s*\(|appendChild\s*\(|Function\s*\(|crypto\.subtle|navigator\.sendBeacon/gi;
+    patternCounts.sensitiveKeywords = (limitedContent.match(sensitiveKeywordsRegex) || []).length;
+    features.set('sensitiveKeywordCount', patternCounts.sensitiveKeywords);
+
+    const suspiciousAssignmentsRegex = /(?:var|let|const)\s+\w+\s*=\s*(['"]([A-Za-z0-9+/=]{50,})['"]|['"][\w\s]+['"]\s*\+[\s\S]{1,100}?['"][\w\s]+['"]);/gi;
+    patternCounts.suspiciousAssignments = (limitedContent.match(suspiciousAssignmentsRegex) || []).length;
+    features.set('suspiciousStringAssignmentCount', patternCounts.suspiciousAssignments);
     
-    // Boolean flags (using .test for efficiency)
+    patternCounts.atobCalls = (limitedContent.match(/(?:window\.)?atob\s*\(/gi) || []).length;
+    patternCounts.dynamicAtobArgs = (limitedContent.match(/(?:window\.)?atob\s*\(\s*(?![ \t]*['"])/gi) || []).length;
+    if (patternCounts.atobCalls > 0) {
+        features.set('dynamicAtobArgsRatio', patternCounts.dynamicAtobArgs / patternCounts.atobCalls);
+    } else {
+        features.set('dynamicAtobArgsRatio', 0);
+    }
+    features.set('atobCallCount', patternCounts.atobCalls);
+
+
+    if (limitedContentLength > 0) {
+        features.set('avgLineLength', limitedContentLength / patternCounts.lineCount);
+        features.set('nonAsciiCharRatio', patternCounts.nonAsciiChars / limitedContentLength);
+        features.set('whitespaceRatio', patternCounts.whitespaceChars / limitedContentLength);
+    } else {
+        features.set('avgLineLength', 0);
+        features.set('nonAsciiCharRatio', 0);
+        features.set('whitespaceRatio', 0);
+    }
+    features.set('maxNestingDepth', patternCounts.maxDepth);
+    features.set('contentLength', limitedContentLength); // Explicitly add contentLength
+
+    // Boolean flags (using .test for efficiency) - Existing
     features.set('hasDataUri', /data:(?:application|text)\/[^;]+;base64,/i.test(limitedContent) ? 1 : 0);
     features.set('hasBlobUri', /blob:[^"']+/i.test(limitedContent) ? 1 : 0);
     // Refined file creation pattern: looks for common download link patterns

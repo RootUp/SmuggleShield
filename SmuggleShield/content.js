@@ -2,15 +2,24 @@
 const mlDetectorInstance = new MLDetector();
 
 class PatternService {
-    constructor(suspiciousPatterns, threshold) {
+    constructor(suspiciousPatternsConfig, threshold) {
         this.threshold = threshold;
-        this.suspiciousPatterns = suspiciousPatterns.map(({ pattern, weight }) => ({
-            pattern: new RegExp(pattern, 'is'), // Ensure flags are consistently applied
-            weight,
-            category: this.categorizePattern(pattern.source) // Pass pattern.source
-        }));
-        this.patternsByWeight = this.groupPatternsByWeight();
-        this.metrics = { matchCount: 0 }; // Internal metrics for this service
+        // Sort patterns by a new 'priority' field (higher first), then by weight for tie-breaking.
+        // Add critical flag processing.
+        this.suspiciousPatterns = suspiciousPatternsConfig
+            .map(({ pattern, weight, name, heuristic, critical, priority }) => ({
+                pattern: new RegExp(pattern, 'is'), // Ensure flags are consistently applied
+                weight,
+                name: name || pattern.source, // Use provided name or regex source as a fallback name
+                heuristic: heuristic, // Optional heuristic function for this pattern
+                critical: critical || false, // Add critical flag
+                priority: priority || 0, // Add priority
+                category: this.categorizePattern(pattern.source)
+            }))
+            .sort((a, b) => b.priority - a.priority || b.weight - a.weight); // Sort by priority then weight
+
+        this.patternsByWeight = this.groupPatternsByWeight(); 
+        this.metrics = { matchCount: 0, heuristicAdjustments: {} };
     }
 
     categorizePattern(patternSource) {
@@ -31,50 +40,81 @@ class PatternService {
     }
 
     analyze(content) {
-        let score = 0;
-        const detectedPatterns = [];
+        let currentScore = 0;
+        const detectedPatternsInfo = [];
+        const MAX_SCORE_TARGET = this.threshold * 1.5; // More aggressive early exit
+        let criticalMatchFound = false;
 
-        if (content.length < 50) {
-            return { isSuspicious: false, detectedPatterns: [], score: 0 };
+        if (content.length < 20) { // Reduced min length for quick check
+            return { isSuspicious: false, detectedPatterns: [], score: 0, heuristicDetails: [], criticalMatch: false };
         }
 
-        const quickCheck = /blob|atob|download|base64|arraybuffer|uint8array|createobjecturl|fromcharcode/i;
-        if (!quickCheck.test(content)) {
-            return { isSuspicious: false, detectedPatterns: [], score: 0 };
+        // Expanded quickCheck, apply only if content is not extremely short
+        const quickCheck = /blob|atob|download|base64|arraybuffer|uint8array|createobjecturl|fromcharcode|eval|document\.write|innerHTML|appendChild|createElement|Function\(|setTimeout|setInterval|script|iframe|srcdoc|location|href|window|document|self|navigator|screen|this|var|let|const|new|try|catch|throw|function|return|=>|import|export|class|extends|super|constructor|prototype|__proto__|yield|async|await|debugger|alert|prompt|confirm|localStorage|sessionStorage|indexedDB|fetch|XMLHttpRequest|WebSocket|importScripts|execScript|msSetImmediate|openDatabase|crypto\.subtle|navigator\.sendBeacon|\.wasm|wasm[_-]?exec\.js|\.src\s*=|\.href\s*=/i;
+        if (content.length > 100 && !quickCheck.test(content)) { 
+            return { isSuspicious: false, detectedPatterns: [], score: 0, heuristicDetails: [], criticalMatch: false };
         }
+        
+        for (const p_config of this.suspiciousPatterns) {
+            // Using exec for first match to check critical status quickly if applicable
+            const firstMatch = p_config.pattern.exec(content); // Get first match for this pattern
+            p_config.pattern.lastIndex = 0; // Reset lastIndex for global regexes if we were to use matchAll later
 
-        const highWeightPatterns = Object.keys(this.patternsByWeight)
-            .filter(weight => parseInt(weight) >= 3)
-            .flatMap(weight => this.patternsByWeight[weight]);
+            if (firstMatch) {
+                this.metrics.matchCount++; // Count first match
+                let effectiveWeight = p_config.weight;
+                let heuristicAppliedInfo = null;
+                let isCriticalAndConfirmed = p_config.critical;
 
-        for (const { pattern, weight } of highWeightPatterns) {
-            if (pattern.test(content)) {
-                score += weight;
-                detectedPatterns.push(pattern.toString());
-                this.metrics.matchCount++;
-                if (score >= this.threshold) {
-                    return { isSuspicious: true, detectedPatterns, score };
-                }
-            }
-        }
-
-        if (score >= this.threshold - 2) { // Check lower weight patterns only if score is close
-            const lowWeightPatterns = Object.keys(this.patternsByWeight)
-                .filter(weight => parseInt(weight) < 3)
-                .flatMap(weight => this.patternsByWeight[weight]);
-
-            for (const { pattern, weight } of lowWeightPatterns) {
-                if (pattern.test(content)) {
-                    score += weight;
-                    detectedPatterns.push(pattern.toString());
-                    this.metrics.matchCount++;
-                    if (score >= this.threshold) {
-                        return { isSuspicious: true, detectedPatterns, score };
+                if (p_config.heuristic) {
+                    const heuristicResult = p_config.heuristic(firstMatch[0], content, firstMatch);
+                    if (heuristicResult) {
+                        effectiveWeight = heuristicResult.adjustedWeight;
+                        heuristicAppliedInfo = heuristicResult.details;
+                        if (p_config.critical && heuristicResult.isBenign === true) {
+                            isCriticalAndConfirmed = false;
+                        }
+                        this.metrics.heuristicAdjustments[p_config.name] = (this.metrics.heuristicAdjustments[p_config.name] || 0) + 1;
+                    } else if (p_config.critical) {
+                        // No heuristic result, critical status stands
                     }
                 }
+                
+                currentScore += effectiveWeight;
+                const detectedInfo = { 
+                    pattern: p_config.pattern.toString(), name: p_config.name,
+                    originalWeight: p_config.weight, effectiveWeight: effectiveWeight,
+                    heuristic: heuristicAppliedInfo, critical: isCriticalAndConfirmed 
+                };
+                detectedPatternsInfo.push(detectedInfo);
+
+                if (isCriticalAndConfirmed && effectiveWeight >= this.threshold) {
+                    criticalMatchFound = true;
+                    currentScore = Math.max(currentScore, this.threshold); 
+                     return { 
+                        isSuspicious: true, 
+                        detectedPatterns: detectedPatternsInfo.map(d => `${d.name} (w:${d.effectiveWeight.toFixed(1)})${d.heuristic ? ' H:'+d.heuristic : ''}${d.critical ? ' C!' : ''}`), 
+                        score: currentScore, heuristicDetails: detectedPatternsInfo, criticalMatch: true 
+                    };
+                }
+
+                // If not critical or not above threshold from a single critical match, continue checking other matches of this pattern (if global)
+                // and other patterns. For simplicity in this pass, we'll assume one significant match per pattern is enough for its contribution.
+                // To check all matches of a global regex: use content.matchAll(p_config.pattern) and loop here.
+                // However, for performance, processing only the first match of high-priority patterns is faster.
             }
+
+            if (currentScore >= this.threshold && this.suspiciousPatterns.indexOf(p_config) < 5) {
+                break; 
+            }
+            if (currentScore >= MAX_SCORE_TARGET) break;
         }
-        return { isSuspicious: score >= this.threshold, detectedPatterns, score };
+
+        return { 
+            isSuspicious: currentScore >= this.threshold, 
+            detectedPatterns: detectedPatternsInfo.map(d => `${d.name} (w:${d.effectiveWeight.toFixed(1)})${d.heuristic ? ' H:'+d.heuristic : ''}${d.critical ? ' C!' : ''}`), 
+            score: currentScore, heuristicDetails: detectedPatternsInfo, criticalMatch: criticalMatchFound
+        };
     }
 
     isSuspiciousScript(scriptContent) {
@@ -216,8 +256,8 @@ class DomScanner {
         const cachedResult = this.analysisCache.get(cacheKey);
 
         if (cachedResult) {
-            if (cachedResult.isSuspicious) {
-                this.handleSuspiciousNode(node, cachedResult.reportingPatterns);
+            if (cachedResult.isSuspicious) { 
+                this.handleSuspiciousNode(node, cachedResult.reportingPatterns || ["CachedSuspicion"]);
             }
             this.blocker.updatePerformanceMetrics(nodeAnalysisStartTime);
             return;
@@ -225,29 +265,47 @@ class DomScanner {
 
         const patternResult = this.patternService.analyze(htmlContent);
         let mlResult = null;
+        let isSuspiciousByML = false;
 
-        if (this.mlIntegrationService.mlEnabled && (htmlContent.length > 1000 || patternResult.score > 1)) {
+        if (patternResult.criticalMatch && patternResult.isSuspicious) {
+            console.debug("Critical pattern match confirmed by PatternService, score:", patternResult.score);
+            // If critical and already suspicious by patterns, we can potentially skip ML or run it with less weight.
+            // For now, the existing logic will proceed.
+        }
+        
+        const mlInvocationScoreThreshold = this.patternService.threshold * 0.4; // e.g. 40% of pattern threshold
+        const shouldInvokeML = this.mlIntegrationService.mlEnabled && 
+                               (htmlContent.length > 800 || // Reasonably long content
+                                patternResult.score > mlInvocationScoreThreshold || // Pattern score is somewhat indicative
+                                (patternResult.criticalMatch && patternResult.score > 0) ); // Critical pattern was involved, even if score low
+
+        if (shouldInvokeML) {
             mlResult = this.mlIntegrationService.detect(htmlContent);
+            isSuspiciousByML = mlResult?.isSmuggling || false;
         }
 
-        const isSuspiciousByPattern = patternResult.score >= this.patternService.threshold;
-        const isSuspiciousByML = this.mlIntegrationService.mlEnabled && (mlResult?.isSmuggling || false);
+        const isSuspiciousByPattern = patternResult.isSuspicious;
         const isSuspicious = isSuspiciousByPattern || isSuspiciousByML;
+        
+        let finalReportingPatterns = [];
+        if (isSuspiciousByPattern) {
+            finalReportingPatterns = patternResult.detectedPatterns;
+        } else if (isSuspiciousByML) {
+            finalReportingPatterns = ["ML:HighConfidence"];
+        }
 
         this.analysisCache.set(cacheKey, {
             isSuspicious: isSuspicious,
             patternScore: patternResult.score,
-            detectedPatterns: patternResult.detectedPatterns,
             mlIsSmuggling: mlResult?.isSmuggling || false,
             mlConfidence: mlResult?.confidence || 0,
-            reportingPatterns: isSuspiciousByPattern ? patternResult.detectedPatterns : (isSuspiciousByML ? ["ML:HighConfidence"] : [])
+            criticalMatch: patternResult.criticalMatch,
+            reportingPatterns: finalReportingPatterns 
         });
         
         if (isSuspicious) {
-            const reportingPatterns = isSuspiciousByPattern ? patternResult.detectedPatterns : (isSuspiciousByML ? ["ML:HighConfidence"] : []);
-            this.handleSuspiciousNode(node, reportingPatterns);
+            this.handleSuspiciousNode(node, finalReportingPatterns);
 
-            // ML Feedback Logic
             setTimeout(() => {
                 if (this.blocker.blocked && this.blocker.lastBlockedNode === node && node.parentNode) {
                     this.mlIntegrationService.learn(htmlContent, true); // Blocked, likely smuggling
@@ -370,10 +428,10 @@ class HTMLSmugglingBlocker {
             { pattern: /window\.navigator\.mssaveoropenblob\s*\(\s*blob\s*,\s*filename\s*\)/i, weight: 3 },
             { pattern: /(?:window\.)?url\.createobjecturl\s*\(\s*(?:blob|[^)]+)\s*\)/i, weight: 2 },
             { pattern: /(?:a|element)\.download\s*=\s*(?:filename|['"][^'"]+['"])/i, weight: 2 },
-            { pattern: /string\.fromcharcode\(.*\)/i, weight: 2 },
-            { pattern: /\.charcodeat\(.*\)/i, weight: 2 },
-            { pattern: /document\.getelementbyid\(['"']passwordid['"']\)\.value/i, weight: 3 },
-            { pattern: /import\s*\(\s*url\.createobjecturl\s*\(/i, weight: 3 },
+            { name: "StringFromCharCodeGeneric", pattern: /string\.fromcharcode\([^)]*\)/i, weight: 1.5, priority: 1 },
+            { name: "CharCodeAt", pattern: /\.charcodeat\([^)]*\)/i, weight: 1.5, priority: 1 },
+            { name: "PasswordStealerAttempt", pattern: /document\.getelementbyid\(['"']passwordid['"']\)\.value/i, weight: 3, critical: true, priority: 9 },
+            { name: "ImportCreateObjectUrl", pattern: /import\s*\(\s*url\.createobjecturl\s*\(/i, weight: 3, priority: 2 },
             { pattern: /\w+\s*\(\s*\w+\s*\(\s*['"][A-Za-z0-9+/=]{50,}['"]\s*\)\s*\)/i, weight: 3 },
             { pattern: /(?:window\.)?atob\s*\(/i, weight: 2 },
             { pattern: /uint8[aA]rray\s*\(\s*(?:(?!len)[^)])*\)/i, weight: 2 },
@@ -408,12 +466,12 @@ class HTMLSmugglingBlocker {
             { pattern: /Function\s*\(\s*['"]return\s+\w+['"](?:\s*\)\s*\(\s*\)|\(\))/i, weight: 4 },
             { pattern: /\w+\.split\s*\(\s*['"]['"]?\s*\)\.reverse\s*\(\s*\)\.join\s*\(/i, weight: 3 },
             { pattern: /\[\s*\w+\.split\s*\(\s*['"]['"]\s*\)\.reverse\s*\(\s*\)/i, weight: 3 },
-            { pattern: /setTimeout\s*\(\s*(?:function|\(\)|[^,]+)\s*(?:=>)?\s*\{[\s\S]{10,}?setTimeout\s*\(/i, weight: 3 },
+            { pattern: /setTimeout\s*\(\s*(?:function|\(\)|[^),]+)\s*(?:=>)?\s*\{[\s\S]{10,}?(?:eval|atob|document\.write|setAttribute|innerHTML|appendChild|createElement|fromCharCode)[\s\S]*?setTimeout\s*\(/is, weight: 3 }, // Refined Pattern 3
             { pattern: /setTimeout\s*\([^{)]*\{[^{}]*setTimeout\s*\([^{)]*\{[^{}]*\}/i, weight: 4 },
             { pattern: /new\s*\([^)]*\[\s*(?:['"][^'"]+['"]\.split|['"]\w+['"]\.split)/i, weight: 4 },
             { pattern: /\[[^\]]*(?:join|reverse)[^\]]*\]\s*\(\s*(?:\w+|['"][^'"]*['"])\s*\)/i, weight: 3 },
-            { pattern: /\[\s*(?:urlMethod|parts\.join\(\)|['"]\w+['"]\s*\+)/i, weight: 3 },
-            { pattern: /\w+\s*\[\s*(?:['"][^'"]+['"](?:\s*\+\s*)?)+\s*\]\s*\(\s*\w+\s*\)/i, weight: 4 },
+            { pattern: /\[\s*(?:['"](?:eval|atob|script|iframe|srcdoc|document|window|location|write|createElement|innerHTML|appendChild)['"]\s*\+\s*['"]\w+['"]|parts\.join\(\)|urlMethod)\s*\]/is, weight: 3 }, // Refined Pattern 1
+            { pattern: /(?:window|document|this|self|navigator|screen)\s*\[\s*(?:['"][\w.-]+['"]\s*\+){1,}\s*['"][\w.-]+['"]\s*\]\s*\([\w\s.,'"]*\)/is, weight: 4 }, // Refined Pattern 4
             { pattern: /['"]?down['"]?\s*\+\s*['"]?load['"]?/i, weight: 3 },
             { pattern: /\['down' \+ 'load'\]/i, weight: 4 },
             { pattern: /createElement\s*\(\s*['"]a['"]\s*\)[^}]*?\[\s*['"]\w+['"]\s*\+\s*['"]\w+['"]\s*\]/i, weight: 4 },
