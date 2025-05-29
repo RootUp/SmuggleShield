@@ -10,7 +10,6 @@ class DashboardManager {
         this.maxErrorRetries = 3;
         this.retryDelay = 2000; // ms
         
-        // Setup automatic whitelist refresh
         this.lastWhitelistData = null;
         this.setupWhitelistAutoRefresh();
     }
@@ -37,7 +36,6 @@ class DashboardManager {
         this.sunIcon = document.querySelector('.sun-icon');
         this.moonIcon = document.querySelector('.moon-icon');
         
-        // Add refresh button to the whitelist section
         const whitelistTitle = document.querySelector('#whitelist-section .section-title');
         if (whitelistTitle) {
             const refreshButton = document.createElement('button');
@@ -90,13 +88,12 @@ class DashboardManager {
 
         this.themeToggle.addEventListener('click', () => this.toggleTheme());
         
-        // Listen for storage changes to keep UI in sync across extension instances
+
         chrome.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local' && changes.whitelist) {
                 console.log('Whitelist changed in storage:', changes.whitelist.newValue);
-                // Update our local cache
+
                 this.lastWhitelistData = [...changes.whitelist.newValue];
-                // Update the UI if whitelist section is visible
                 if (this.sections.whitelist.style.display !== 'none') {
                     this.renderUrlList(changes.whitelist.newValue);
                 }
@@ -113,7 +110,6 @@ class DashboardManager {
             element.style.display = id === sectionId ? 'block' : 'none';
         });
         
-        // Reload whitelist data when switching to the whitelist section
         if (sectionId === 'whitelist') {
             this.loadWhitelist();
         }
@@ -128,7 +124,6 @@ class DashboardManager {
 
     async loadWhitelist() {
         try {
-            // Force a fresh fetch from storage each time
             const result = await chrome.storage.local.get('whitelist');
             const whitelist = result.whitelist || [];
             this.renderUrlList(whitelist);
@@ -150,17 +145,32 @@ class DashboardManager {
     }
 
     async addUrl() {
-        const url = this.urlInput.value.trim();
+        const rawUrl = this.urlInput.value.trim();
         
-        if (!url) {
+        if (!rawUrl) {
             this.showNotification('Please enter a URL', 'error');
             return;
         }
 
+        let urlObj;
         try {
-            const urlObj = new URL(url);
-            const hostname = urlObj.hostname;
+            urlObj = new URL(rawUrl);
+        } catch (error) {
+            this.showNotification('Invalid URL format. Please enter a full URL (e.g., https://example.com)', 'error');
+            return;
+        }
 
+        let hostname = urlObj.hostname;
+        if (hostname) {
+            hostname = hostname.trim().toLowerCase();
+        }
+
+        if (!hostname || !this.isValidHostname(hostname)) {
+            this.showNotification('Invalid hostname extracted. Please check the URL.', 'error');
+            return;
+        }
+
+        try {
             const result = await chrome.storage.local.get('whitelist');
             const whitelist = result.whitelist || [];
 
@@ -172,17 +182,38 @@ class DashboardManager {
             whitelist.push(hostname);
             
             if (await this.saveWhitelist(whitelist)) {
-                // Keep our local cache updated
                 this.lastWhitelistData = [...whitelist];
                 
-                // Immediately update the UI
                 this.renderUrlList(whitelist);
                 this.urlInput.value = '';
-                this.showNotification('URL added to whitelist', 'success');
+                this.showNotification('Hostname added to whitelist', 'success');
             }
         } catch (error) {
-            this.showNotification('Please enter a valid URL', 'error');
+            // This catch is for issues with storage or saving, not URL parsing.
+            this.showNotification('Error saving whitelist: ' + error.message, 'error');
+            console.error('Error processing whitelist addition:', error);
         }
+    }
+
+    isValidHostname(hostname) {
+        if (hostname.length > 253) {
+            return false;
+        }
+        if (hostname.startsWith('.') || hostname.endsWith('.')) {
+            return false;
+        }
+        const hostnameRegex = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$/;
+        if (!hostnameRegex.test(hostname)) {
+            return false;
+        }
+        const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+        if (ipRegex.test(hostname)) {
+            const parts = hostname.split('.');
+            if (parts.some(part => parseInt(part, 10) > 255)) {
+                return false; // Invalid IP byte
+            }
+        }
+        return true;
     }
 
     async removeUrl(hostname) {
@@ -192,10 +223,8 @@ class DashboardManager {
             const newWhitelist = whitelist.filter(url => url !== hostname);
             
             if (await this.saveWhitelist(newWhitelist)) {
-                // Keep our local cache updated
                 this.lastWhitelistData = [...newWhitelist];
                 
-                // Immediately update the UI
                 this.renderUrlList(newWhitelist);
                 this.showNotification('URL removed from whitelist', 'success');
             }
@@ -206,29 +235,24 @@ class DashboardManager {
 
     async saveWhitelist(whitelist) {
         try {
-            // Save to storage first
             await chrome.storage.local.set({ whitelist });
             console.log('Whitelist saved:', whitelist);
             
-            // Notify background script about the whitelist change
+
             await chrome.runtime.sendMessage({ 
                 action: "whitelistUpdated" 
             });
             
-            // Let content scripts know about the change
             const tabs = await chrome.tabs.query({});
             for (const tab of tabs) {
                 try {
-                    // Only message regular web pages
                     if (tab.url && tab.url.startsWith('http')) {
                         await chrome.tabs.sendMessage(tab.id, { 
                             action: "whitelistUpdated" 
                         }).catch(e => console.debug('Tab not ready for message:', e));
                         
-                        // Check if this tab is now whitelisted
                         const tabHostname = new URL(tab.url).hostname;
                         if (whitelist.includes(tabHostname)) {
-                            // Give the content script time to process the whitelist update
                             setTimeout(() => {
                                 chrome.tabs.reload(tab.id);
                             }, 100);
@@ -255,7 +279,6 @@ class DashboardManager {
             return;
         }
 
-        // Sort whitelist alphabetically for better readability
         whitelist.sort().forEach(hostname => {
             const urlItem = document.createElement('div');
             urlItem.className = 'url-item';
