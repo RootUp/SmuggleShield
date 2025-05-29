@@ -150,17 +150,34 @@ class DashboardManager {
     }
 
     async addUrl() {
-        const url = this.urlInput.value.trim();
+        const rawUrl = this.urlInput.value.trim();
         
-        if (!url) {
+        if (!rawUrl) {
             this.showNotification('Please enter a URL', 'error');
             return;
         }
 
+        let urlObj;
         try {
-            const urlObj = new URL(url);
-            const hostname = urlObj.hostname;
+            urlObj = new URL(rawUrl);
+        } catch (error) {
+            this.showNotification('Invalid URL format. Please enter a full URL (e.g., https://example.com)', 'error');
+            return;
+        }
 
+        // Extract and prepare hostname
+        let hostname = urlObj.hostname;
+        if (hostname) {
+            hostname = hostname.trim().toLowerCase();
+        }
+
+        // Validate hostname format
+        if (!hostname || !this.isValidHostname(hostname)) {
+            this.showNotification('Invalid hostname extracted. Please check the URL.', 'error');
+            return;
+        }
+
+        try {
             const result = await chrome.storage.local.get('whitelist');
             const whitelist = result.whitelist || [];
 
@@ -178,11 +195,42 @@ class DashboardManager {
                 // Immediately update the UI
                 this.renderUrlList(whitelist);
                 this.urlInput.value = '';
-                this.showNotification('URL added to whitelist', 'success');
+                this.showNotification('Hostname added to whitelist', 'success');
             }
         } catch (error) {
-            this.showNotification('Please enter a valid URL', 'error');
+            // This catch is for issues with storage or saving, not URL parsing.
+            this.showNotification('Error saving whitelist: ' + error.message, 'error');
+            console.error('Error processing whitelist addition:', error);
         }
+    }
+
+    isValidHostname(hostname) {
+        if (hostname.length > 253) {
+            return false;
+        }
+        if (hostname.startsWith('.') || hostname.endsWith('.')) {
+            return false;
+        }
+        // Standard DNS hostname regex (simplified for common cases, allows IDNs via punycode)
+        // Allows labels up to 63 chars, consisting of a-z, 0-9, and hyphens (not at start/end).
+        const hostnameRegex = /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$/;
+        // For Internationalized Domain Names (IDNs), they are typically handled in their Punycode form (xn--...)
+        // by the URL constructor for the hostname property. This regex should work for Punycode.
+        if (!hostnameRegex.test(hostname)) {
+            return false;
+        }
+        // Additional check for IP addresses, as they are valid hostnames but we might want to treat them distinctly
+        // or ensure they are not mixed with domain names if specific logic depends on that.
+        // For this purpose, we accept valid IP addresses as hostnames.
+        // A simple IP regex (does not validate all byte ranges perfectly but good enough for format):
+        const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+        if (ipRegex.test(hostname)) {
+            const parts = hostname.split('.');
+            if (parts.some(part => parseInt(part, 10) > 255)) {
+                return false; // Invalid IP byte
+            }
+        }
+        return true;
     }
 
     async removeUrl(hostname) {
