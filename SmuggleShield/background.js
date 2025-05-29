@@ -82,15 +82,25 @@ function debounce(func, delay) {
 const debouncedLogBlockedContent = debounce(logBlockedContent, 1000);
 
 async function isWhitelisted(url) {
+  if (!url || typeof url !== 'string') {
+    console.warn('isWhitelisted: Invalid or empty URL provided.');
+    return false;
+  }
   try {
-    const hostname = new URL(url).hostname;
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase(); 
+    
+    if (!hostname) {
+        console.warn(`isWhitelisted: Extracted empty hostname from URL: ${url}`);
+        return false;
+    }
+
     const result = await chrome.storage.local.get('whitelist');
     const whitelist = result.whitelist || [];
-    console.log('Background checking whitelist for:', hostname, 'Whitelist:', whitelist);
-    return whitelist.includes(hostname);
+    return whitelist.map(h => h.toLowerCase()).includes(hostname);
   } catch (error) {
-    console.error('Error checking whitelist:', error);
-    return false;
+    console.error(`Error checking whitelist for URL "${url}":`, error);
+    return false; 
   }
 }
 
@@ -100,20 +110,39 @@ async function notifyWhitelistChange() {
     console.log(`Notifying ${tabs.length} tabs about whitelist changes`);
     
     for (const tab of tabs) {
+      if (!tab.id || !tab.url) continue; // Skip tabs without id or url
+
       try {
-        if (tab.url && tab.url.startsWith('http')) {
+        let tabHostname;
+        try {
+            const tabUrlObj = new URL(tab.url);
+            tabHostname = tabUrlObj.hostname.toLowerCase();
+        } catch (e) {
+            console.debug(`Skipping tab with invalid URL for whitelist notification: ${tab.url}`, e);
+            continue;
+        }
+
+        if (tab.url.startsWith('http')) {
           const isWhitelistedUrl = await isWhitelisted(tab.url);
+          
           await chrome.tabs.sendMessage(tab.id, { 
             action: "setWhitelisted",
             value: isWhitelistedUrl
-          }).catch(error => console.debug(`Tab not ready for message: ${tab.id}`, error));
+          }).catch(error => console.debug(`Tab not ready for "setWhitelisted" message: ${tab.id}, URL: ${tab.url}`, error));
           
           if (isWhitelistedUrl) {
-            await chrome.tabs.reload(tab.id);
+            const currentWhitelistResult = await chrome.storage.local.get('whitelist');
+            const currentWhitelist = (currentWhitelistResult.whitelist || []).map(h => h.toLowerCase());
+
+            if (currentWhitelist.includes(tabHostname)) {
+                setTimeout(() => {
+                    chrome.tabs.reload(tab.id).catch(err => console.debug(`Error reloading tab ${tab.id}: ${err.message}`));
+                }, 250);
+            }
           }
         }
       } catch (error) {
-        console.debug('Error updating tab:', error);
+        console.debug(`Error processing tab ${tab.id} for whitelist notification:`, error);
       }
     }
   } catch (error) {
@@ -122,26 +151,26 @@ async function notifyWhitelistChange() {
 }
 
 chrome.webNavigation.onCommitted.addListener(async (details) => {
-  if (details.frameId === 0) { // Main frame only
-    const isWhitelistedUrl = await isWhitelisted(details.url);
-    console.log('Navigation detected, sending whitelist status:', details.url, isWhitelistedUrl);
-    if (isWhitelistedUrl) {
+  if (details.frameId === 0 && details.url) { 
+    const whitelisted = await isWhitelisted(details.url);
+    console.log('Navigation detected, sending whitelist status:', details.url, whitelisted);
+    if (whitelisted) {
       chrome.tabs.sendMessage(details.tabId, {
         action: "setWhitelisted",
         value: true
-      }).catch(error => console.debug('Tab not ready yet:', error));
+      }).catch(error => console.debug(`Tab not ready for "setWhitelisted" (onCommitted): ${details.tabId}, URL: ${details.url}`, error));
     }
   }
 });
 
 chrome.webNavigation.onCompleted.addListener(async (details) => {
-  if (details.frameId === 0) { // Main frame only
-    const isWhitelistedUrl = await isWhitelisted(details.url);
-    console.log('Navigation completed, confirming whitelist status:', details.url, isWhitelistedUrl);
+  if (details.frameId === 0 && details.url) {
+    const whitelisted = await isWhitelisted(details.url);
+    console.log('Navigation completed, confirming whitelist status:', details.url, whitelisted);
     chrome.tabs.sendMessage(details.tabId, {
       action: "setWhitelisted",
-      value: isWhitelistedUrl
-    }).catch(error => console.debug('Tab not ready yet on completed:', error));
+      value: whitelisted
+    }).catch(error => console.debug(`Tab not ready for "setWhitelisted" (onCompleted): ${details.tabId}, URL: ${details.url}`, error));
   }
 });
 
@@ -152,10 +181,18 @@ chrome.webRequest.onBeforeRequest.addListener(
       return { cancel: false };
     }
 
-    const isSuspiciousUrl = checkSuspiciousURL(details.url);
+    let isSuspiciousUrl = false;
+    if (details.url && typeof details.url === 'string') {
+        try {
+            isSuspiciousUrl = checkSuspiciousURL(details.url); 
+        } catch (e) {
+            console.warn(`Error parsing URL in onBeforeRequest for checkSuspiciousURL: ${details.url}`, e);
+            isSuspiciousUrl = false; 
+        }
+    }
     
     if (isSuspiciousUrl) {
-      console.log('Suspicious URL detected:', details.url);
+      console.log('Suspicious URL detected, blocking request:', details.url);
       return { cancel: true };
     }
 
@@ -173,8 +210,12 @@ chrome.webRequest.onHeadersReceived.addListener(
 
     const hasSuspiciousHeaders = checkSuspiciousHeaders(details.responseHeaders);
     if (hasSuspiciousHeaders) {
-      chrome.tabs.sendMessage(details.tabId, {action: "suspiciousHeadersDetected"})
-        .catch(error => console.error('Error sending message:', error));
+      if (details.tabId && details.tabId >= 0) { 
+        chrome.tabs.sendMessage(details.tabId, {action: "suspiciousHeadersDetected"})
+          .catch(error => console.debug(`Error sending "suspiciousHeadersDetected" message to tab ${details.tabId}:`, error));
+      } else {
+        console.warn("Cannot send suspiciousHeadersDetected message: Invalid tabId.", details);
+      }
     }
     return {responseHeaders: details.responseHeaders};
   },
@@ -186,7 +227,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request);
   switch (request.action) {
     case "logWarning":
-      debouncedLogBlockedContent(sender.tab.url, request.patterns, Date.now());
+      let logUrl = "Unknown URL";
+      if (sender && sender.tab && sender.tab.url) {
+        try {
+          logUrl = sender.tab.url; 
+        } catch (e) {
+          console.warn("Error parsing sender.tab.url for logging:", e);
+        }
+      }
+      debouncedLogBlockedContent(logUrl, request.patterns, Date.now());
       console.warn(request.message);
       break;
     case "analyzeURL":
@@ -194,40 +243,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (whitelisted) {
           sendResponse({isSuspicious: false, whitelisted: true});
         } else {
-          const result = memoizedAnalyzeURL(request.url);
-          if (Date.now() - result.timestamp < config.cacheDurationMs) {
-            sendResponse({isSuspicious: result.isSuspicious, whitelisted: false});
-          } else {
-            const newResult = memoizedAnalyzeURL(request.url);
-            sendResponse({isSuspicious: newResult.isSuspicious, whitelisted: false});
+          let analysisResult;
+          try {
+            const result = memoizedAnalyzeURL(request.url); 
+            if (Date.now() - result.timestamp < config.cacheDurationMs) {
+              analysisResult = {isSuspicious: result.isSuspicious, whitelisted: false};
+            } else {
+              const newResult = memoizedAnalyzeURL(request.url);
+              analysisResult = {isSuspicious: newResult.isSuspicious, whitelisted: false};
+            }
+          } catch (e) {
+            console.warn(`Error analyzing URL "${request.url}":`, e);
+            analysisResult = {isSuspicious: false, whitelisted: false, error: "URL analysis failed"}; 
           }
+          sendResponse(analysisResult);
         }
+      }).catch(error => {
+        console.error(`Error in analyzeURL handler for URL "${request.url}":`, error);
+        sendResponse({isSuspicious: false, whitelisted: false, error: "Whitelist check failed"});
       });
-      return true;
+      return true; 
     case "exportLogs":
-      chrome.storage.local.get(['blockedLogs'], result => {
+      chrome.storage.local.get(['blockedLogs'], (result) => {
+        if (chrome.runtime.lastError) {
+            console.error("Error retrieving logs for export:", chrome.runtime.lastError);
+            sendResponse({ logs: [], error: "Failed to retrieve logs" });
+            return;
+        }
         sendResponse({ logs: result.blockedLogs || [] });
       });
-      return true;
+      return true; 
     case "updateConfig":
-      updateConfig(request.newConfig);
-      sendResponse({success: true});
+      if (request.newConfig && typeof request.newConfig === 'object') {
+        updateConfig(request.newConfig);
+        sendResponse({success: true});
+      } else {
+        console.warn("Invalid newConfig received:", request.newConfig);
+        sendResponse({success: false, error: "Invalid configuration data"});
+      }
       return true;
     case "whitelistUpdated":
       console.log('Whitelist updated message received, notifying tabs');
-      notifyWhitelistChange();
-      chrome.storage.local.get('whitelist').then(result => {
-        const whitelist = result.whitelist || [];
-        console.log('Whitelist updated (via merged listener):', whitelist);
-      });
+      notifyWhitelistChange(); 
+      sendResponse({success: true});
       return true;
   }
+  return false;
 });
 
 function logBlockedContent(url, patterns, timestamp) {
+
+  const validatedUrl = (typeof url === 'string' && url.length > 0) ? url : "Invalid or Unspecified URL";
+  const validatedPatterns = Array.isArray(patterns) ? patterns : ["Unknown Pattern"];
+
   chrome.storage.local.get(['blockedLogs'], function(result) {
+    if (chrome.runtime.lastError) {
+        console.error("Error retrieving logs for logging blocked content:", chrome.runtime.lastError);
+        return;
+    }
     let logs = result.blockedLogs || [];
-    logs.push({ url, patterns, timestamp });
+    logs.push({ url: validatedUrl, patterns: validatedPatterns, timestamp });
+    
     const retentionDate = Date.now() - (config.logRetentionDays * 24 * 60 * 60 * 1000);
     logs = logs.filter(log => log.timestamp > retentionDate);
     

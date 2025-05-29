@@ -43,7 +43,6 @@ class MLDetector {
     try {
       const now = Date.now();
       if (now - this.lastModelSave < this.saveThrottleMs) {
-        // If we're saving too frequently, schedule a save for later
         if (!this.pendingSave) {
           this.pendingSave = true;
           setTimeout(() => {
@@ -99,45 +98,68 @@ class MLDetector {
     const limitedContent = content.length > 50000 ? 
       content.substring(0, 25000) + content.substring(content.length - 25000) : 
       content;
-    
-    
+    const limitedContentLength = limitedContent.length; // For density calculations
+
     const patternCounts = {
-      base64: 0,
+      base64Blocks: 0,
+      totalBase64Chars: 0,
       blob: 0,
       download: 0,
-      script: 0, 
-      encoding: 0,
-      binary: 0
+      scriptTags: 0, 
+      encodingCalls: 0,
+      binaryConstructs: 0,
+      jsKeywords: 0,
     };
     
-    
     const base64Matches = limitedContent.match(/[A-Za-z0-9+/=]{100,}/g) || [];
-    patternCounts.base64 = base64Matches.length;
+    patternCounts.base64Blocks = base64Matches.length;
+    for (const match of base64Matches) {
+      patternCounts.totalBase64Chars += match.length;
+    }
     
+    features.set('base64BlockCount', patternCounts.base64Blocks);
+    features.set('totalBase64Chars', patternCounts.totalBase64Chars);
+    if (limitedContentLength > 0) {
+      features.set('base64ContentRatio', patternCounts.totalBase64Chars / limitedContentLength);
+      features.set('avgBase64BlockLength', patternCounts.base64Blocks > 0 ? patternCounts.totalBase64Chars / patternCounts.base64Blocks : 0);
+    } else {
+      features.set('base64ContentRatio', 0);
+      features.set('avgBase64BlockLength', 0);
+    }
+
     patternCounts.blob = (limitedContent.match(/new\s+blob/gi) || []).length;
-    
     patternCounts.download = (limitedContent.match(/download\s*=\s*["'][^"']*["']/gi) || []).length;
     
-    patternCounts.script = (limitedContent.match(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi) || []).length;
+    let scriptTagCount = 0;
+    let scriptPos = limitedContent.indexOf('<script');
+    while (scriptPos > -1) {
+        scriptTagCount++;
+        scriptPos = limitedContent.indexOf('<script', scriptPos + 7); // Move past '<script'
+    }
+    patternCounts.scriptTags = scriptTagCount;
     
-    patternCounts.encoding = (limitedContent.match(/atob|btoa|encode|decode/gi) || []).length;
+    patternCounts.encodingCalls = (limitedContent.match(/atob|btoa|encodeURIComponent|decodeURIComponent|escape|unescape/gi) || []).length;
+    patternCounts.binaryConstructs = (limitedContent.match(/ArrayBuffer|Uint8Array|DataView|BlobBuilder/gi) || []).length;
+
+    const jsKeywordsRegex = /eval|fromCharCode|Function\(|constructor|prototype|__proto__|setTimeout\(|setInterval\(|document\.write/gi;
+    patternCounts.jsKeywords = (limitedContent.match(jsKeywordsRegex) || []).length;
+
+    features.set('blobUsageCount', patternCounts.blob);
+    features.set('downloadAttrCount', patternCounts.download);
+
+    if (limitedContentLength > 0) {
+      features.set('scriptTagDensity', patternCounts.scriptTags / (limitedContentLength / 1000));
+      features.set('jsKeywordDensity', patternCounts.jsKeywords / (limitedContentLength / 1000));
+    } else {
+      features.set('scriptTagDensity', 0);
+      features.set('jsKeywordDensity', 0);
+    }
+    features.set('encodingCallCount', patternCounts.encodingCalls);
+    features.set('binaryConstructCount', patternCounts.binaryConstructs);
     
-    patternCounts.binary = (limitedContent.match(/ArrayBuffer|Uint8Array|DataView/gi) || []).length;
-    
-    features.set('base64Length', patternCounts.base64);
-    features.set('blobUsage', patternCounts.blob);
-    features.set('downloadAttr', patternCounts.download);
-    features.set('scriptDensity', patternCounts.script / (limitedContent.length / 1000));
-    features.set('encodingFunctions', patternCounts.encoding);
-    features.set('binaryManipulation', patternCounts.binary);
-    
-    const hasDataUri = /data:application\/[^;]+;base64,/i.test(limitedContent);
-    const hasBlobUri = /blob:[^"']+/i.test(limitedContent);
-    const hasFileCreation = /\.click\(\s*\)[^}]*(?:revoke|remove)/i.test(limitedContent);
-    
-    features.set('hasDataUri', hasDataUri ? 1 : 0);
-    features.set('hasBlobUri', hasBlobUri ? 1 : 0);
-    features.set('hasFileCreation', hasFileCreation ? 1 : 0);
+    features.set('hasDataUri', /data:(?:application|text)\/[^;]+;base64,/i.test(limitedContent) ? 1 : 0);
+    features.set('hasBlobUri', /blob:[^"']+/i.test(limitedContent) ? 1 : 0);
+    features.set('hasFileCreationPattern', /\.href\s*=\s*.*?\.download\s*=\s*.*?\.click\(\)/i.test(limitedContent) ? 1 : 0);
     
     if (this.featureCache.size >= this.maxCacheSize) {
       const firstKey = this.featureCache.keys().next().value;
