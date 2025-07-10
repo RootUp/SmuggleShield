@@ -40,6 +40,7 @@ https://github.com/user-attachments/assets/8d97fdcf-b3d2-4ddb-a846-0900e333b7fe
       </a>
     </td>
     <td>
+      <a href="https://x.com/MalDevAcademy/status/1927737455421030554" target="_blank">
       <img src="https://github.com/user-attachments/assets/fd06745a-6e96-4f96-b3b2-ab697d2bab1c" 
            alt="Screenshot" 
            width="400" 
