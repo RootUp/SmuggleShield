@@ -27,6 +27,27 @@ https://github.com/user-attachments/assets/8b8f1333-6a99-4979-bc17-56026a048ba8
 
 https://github.com/user-attachments/assets/8d97fdcf-b3d2-4ddb-a846-0900e333b7fe
 
+## Loved by the Community
+
+<table>
+  <tr>
+    <td>
+      <a href="https://x.com/MalDevAcademy/status/1917240995399573838" target="_blank">
+        <img src="https://github.com/user-attachments/assets/7ac946a8-9ce2-453e-9bf5-a938b74806a9" 
+             alt="Tweet by @MalDevAcademy" 
+             width="400" 
+             style="border-radius: 6px; opacity: 0.9;" />
+      </a>
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/fd06745a-6e96-4f96-b3b2-ab697d2bab1c" 
+           alt="Screenshot" 
+           width="400" 
+           style="border-radius: 6px; opacity: 0.9;" />
+    </td>
+  </tr>
+</table>
+
 ## Incognito Mode Support
 SmuggleShield can protect against HTML smuggling attempts in incognito mode, but requires manual activation. To enable incognito protection: open Chrome's extension management page (`chrome://extensions/`), click "**Details**" on SmuggleShield, and toggle "**Allow in incognito**". Note: This setting is disabled by default as per Chrome's security policy. When enabled, the extension will maintain separate states for normal and incognito sessions to preserve privacy, while providing the same level of protection against HTML smuggling attempts in both modes.
 
@@ -48,3 +69,6 @@ I have taken multiple code references from StackOverflow/Github and file smuggli
 
 ## Privacy Policy
 [Privacy Policy for SmuggleShield](https://www.inputzero.io/p/smuggelsheild.html)
+
+
+
